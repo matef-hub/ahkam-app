@@ -1,4 +1,3 @@
-
 import { escapeHtml, safeJsonForHtml } from "../lib/arabic.js";
 
 const SHARED_STYLES = `
