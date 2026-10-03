@@ -1,0 +1,17 @@
+﻿# Cloudflare & Wrangler cache
+.wrangler/
+worker-startup.cpuprofile
+
+# Local SQLite databases (Do NOT commit)
+*.db
+*.sqlite
+*.sqlite3
+
+# Environment & credentials
+.dev.vars
+.env
+.env.*
+
+# OS files
+Thumbs.db
+Desktop.ini
