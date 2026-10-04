@@ -81,10 +81,14 @@ export function validateSearchQuery(url) {
   const court = readParam(url, "court");
   const pageRaw = readParam(url, "page");
   const pageSizeRaw = readParam(url, "page_size");
+  const sort = url.searchParams.get("sort");
 
   if (!q) return { valid: false, error: "نص البحث مطلوب" };
   if (q.length < 2) return { valid: false, error: "يجب ألا يقل نص البحث عن حرفين" };
   if (q.length > 160) return { valid: false, error: "نص البحث طويل جداً (الحد الأقصى 160 حرفاً)" };
+  if (sort && sort !== "newest") {
+    return { valid: false, error: "ترتيب النتائج غير صالح" };
+  }
 
   const units = getSearchUnits(q);
   if (!units.length) return { valid: false, error: "تعذر استخراج كلمات صالحة من نص البحث" };

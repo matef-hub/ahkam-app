@@ -3,9 +3,14 @@ import { buildFts5Query, extractSnippetAndHighlight } from "./arabic.js";
 const MAX_SNIPPETS_PER_JUDGMENT = 3;
 
 function buildHitCte(ftsSpec) {
+  // The original program searches numbered legal principles, not judgment
+  // headers or the full reasons/verdict paragraph (Fakra_No <= 0).
   return ftsSpec.queries.map((_, index) => `
-    SELECT Master_ID, Fakra_ID, rank AS p_rank, ${index} AS term_no
+    SELECT FTS_Judgments.Master_ID, FTS_Judgments.Fakra_ID, rank AS p_rank, ${index} AS term_no
     FROM FTS_Judgments
+    JOIN Judgments_Text AS searchable_text
+      ON searchable_text.Fakra_ID = FTS_Judgments.Fakra_ID
+      AND searchable_text.Fakra_No > 0
     WHERE FTS_Judgments MATCH ?
   `).join(" UNION ALL ");
 }
@@ -69,7 +74,25 @@ export async function searchJudgments(db, { query, courtIds = [], page, pageSize
       b.actual_match_count,
       b.matched_terms,
       m.Case_Year,
-      m.Case_No
+      m.Case_No,
+      CASE
+        WHEN m.Case_Date GLOB '[0-9][0-9][0-9][0-9]-[0-9]-[0-9]'
+          OR m.Case_Date GLOB '[0-9][0-9][0-9][0-9]-[0-9]-[0-9][0-9]'
+          OR m.Case_Date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9]'
+          OR m.Case_Date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'
+        THEN
+          CAST(substr(m.Case_Date, 1, 4) AS INTEGER) * 10000 +
+          CAST(substr(
+            m.Case_Date,
+            6,
+            instr(substr(m.Case_Date, 6), '-') - 1
+          ) AS INTEGER) * 100 +
+          CAST(substr(
+            m.Case_Date,
+            6 + instr(substr(m.Case_Date, 6), '-')
+          ) AS INTEGER)
+        ELSE NULL
+      END AS case_date_sort
     FROM by_judgment b
     JOIN Judgments_Master m ON m.Master_ID = b.Master_ID
     WHERE b.matched_terms = ?`;
@@ -82,11 +105,11 @@ export async function searchJudgments(db, { query, courtIds = [], page, pageSize
 
   pagedSql += `
     ORDER BY
-      b.best_rank ASC,
-      b.actual_match_count DESC,
+      CASE WHEN case_date_sort IS NULL THEN 1 ELSE 0 END ASC,
+      case_date_sort DESC,
       m.Case_Year DESC,
       m.Case_No DESC,
-      m.Master_ID ASC
+      m.Master_ID DESC
     LIMIT ? OFFSET ?`;
   pagedBinds.push(pageSize, offset);
 

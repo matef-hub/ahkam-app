@@ -856,12 +856,15 @@ ${safeJsonForHtml({
       <label for="textCourtId" class="sr-only">اختر المحكمة أو الدائرة</label>
       <select id="textCourtId" class="form-select">
         <option value="">جميع المحاكم والدوائر القضائية</option>
-        <option value="1">النقض المدني</option>
-        <option value="2">النقض الجنائي</option>
-        <option value="4">المحكمة الدستورية العليا</option>
-        <option value="3">المحكمة الإدارية العليا</option>
-        <option value="31">أحكام القضاء الإداري</option>
-        <option value="3,31">مجلس الدولة (الإدارية العليا والقضاء الإداري)</option>
+        <option value="1,29">النقض المدني + سوابق النقض المدني</option>
+        <option value="2,30">النقض الجنائي + سوابق النقض الجنائي</option>
+        <option value="4,25">الدستورية العليا + سوابقها</option>
+        <option value="3,37">الإدارية العليا + سوابقها</option>
+        <option value="31,36,47">القضاء الإداري + سوابقه وأحكام المحكمة الإدارية</option>
+        <option value="3,31,36,37,47">مجلس الدولة (كل المحاكم والسوابق)</option>
+        <option value="21">المحكمة العليا</option>
+        <option value="24">محكمة جنائي عابدين</option>
+        <option value="35">أحكام الدعم والإغراق</option>
       </select>
 
       <div class="input-group">
@@ -885,6 +888,15 @@ ${safeJsonForHtml({
         <option value="4">المحكمة الدستورية العليا</option>
         <option value="3">المحكمة الإدارية العليا</option>
         <option value="31">أحكام القضاء الإداري</option>
+        <option value="21">المحكمة العليا</option>
+        <option value="24">محكمة جنائي عابدين</option>
+        <option value="25">سوابق المحكمة الدستورية العليا</option>
+        <option value="29">سوابق النقض المدني</option>
+        <option value="30">سوابق النقض الجنائي</option>
+        <option value="35">أحكام الدعم والإغراق</option>
+        <option value="36">سوابق القضاء الإداري</option>
+        <option value="37">سوابق المحكمة الإدارية العليا</option>
+        <option value="47">أحكام المحكمة الإدارية</option>
       </select>
 
       <div class="input-group">
@@ -946,10 +958,10 @@ ${safeJsonForHtml({
       <div class="footer-col">
         <h3>🏛️ النطاق القضائي</h3>
         <ul class="footer-links">
-          <li><a href="/" data-court="1"><span style="color:#3b82f6;">▪</span> محكمة النقض (الدوائر المدنية)</a></li>
-          <li><a href="/" data-court="2"><span style="color:#3b82f6;">▪</span> محكمة النقض (الدوائر الجنائية)</a></li>
-          <li><a href="/" data-court="4"><span style="color:#3b82f6;">▪</span> المحكمة الدستورية العليا</a></li>
-          <li><a href="/" data-court="3,31"><span style="color:#3b82f6;">▪</span> مجلس الدولة (الإدارية العليا والقضاء الإداري)</a></li>
+          <li><a href="/" data-court="1,29"><span style="color:#3b82f6;">▪</span> محكمة النقض (الدوائر المدنية + السوابق)</a></li>
+          <li><a href="/" data-court="2,30"><span style="color:#3b82f6;">▪</span> محكمة النقض (الدوائر الجنائية + السوابق)</a></li>
+          <li><a href="/" data-court="4,25"><span style="color:#3b82f6;">▪</span> المحكمة الدستورية العليا + سوابقها</a></li>
+          <li><a href="/" data-court="3,31,36,37,47"><span style="color:#3b82f6;">▪</span> مجلس الدولة (كل المحاكم والسوابق)</a></li>
         </ul>
       </div>
 
@@ -1097,7 +1109,7 @@ async function executeTextSearch(page = 1, { pushHistory = true } = {}) {
   }, 2200);
 
   try {
-    let endpoint = "/api/search?q=" + encodeURIComponent(query) + "&page=" + page + "&page_size=20";
+    let endpoint = "/api/search?q=" + encodeURIComponent(query) + "&page=" + page + "&page_size=20&sort=newest";
     if (courtId) endpoint += "&court=" + encodeURIComponent(courtId);
 
     const res = await fetch(endpoint, { signal });
@@ -1137,7 +1149,7 @@ function renderSearchResults(data) {
     return showMessage("لم يتم العثور على أحكام قضائية مطابقة للبحث المطلوب.");
   }
 
-  showStats(data.total_judgments, data.total_matches, "ترتيب حسب صلة النتائج");
+  showStats(data.total_judgments, data.total_matches, "الأحدث إلى الأقدم");
 
   let html = \`
     <div class="results-header-info">

@@ -1,8 +1,14 @@
 import { ALLOWED_ORIGINS } from "./security.js";
 
 const CACHE_PARAM_ALLOWLIST = {
-  "/api/search": ["q", "court", "page", "page_size"],
+  "/api/search": ["q", "court", "page", "page_size", "sort"],
   "/api/judgment": ["id", "no", "yr", "court"],
+};
+
+// Bump this when the search response ordering changes so old Cache API entries
+// cannot continue serving results in the previous order.
+const CACHE_KEY_VERSIONS = {
+  "/api/search": "court-principles-v2",
 };
 
 const CACHEABLE_STATUSES = new Set([200, 404]);
@@ -16,6 +22,9 @@ export function getCacheKey(request) {
   // (judgment pages, sitemaps) ignores the query string completely so that
   // /judgment/1?x=1, /judgment/1?x=2 ... all share a single cache entry.
   if (allowed) {
+    const cacheVersion = CACHE_KEY_VERSIONS[url.pathname];
+    if (cacheVersion) sortedParams.set("__cache_version", cacheVersion);
+
     for (const key of [...allowed].sort()) {
       const value = url.searchParams.get(key);
       if (value !== null && value !== "") sortedParams.set(key, value);

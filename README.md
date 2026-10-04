@@ -31,7 +31,7 @@
 ## Capabilities
 
 - **Arabic-aware search:** normalizes diacritics, tatweel, Arabic-Indic and Persian digits, Hamza forms, Ta Marbuta/Ha, and Alef Maksura/Ya. It also expands common prefix forms before building FTS5 queries.
-- **Focused results:** ranks judgments by FTS relevance and fetches at most three matching excerpts for each returned judgment.
+- **Focused results:** searches numbered legal-principle paragraphs, lists judgments from newest to oldest by session date, then uses the judicial year and case number to break ties. Judgments without a parseable date follow dated results. Each result includes at most three matching excerpts.
 - **Judgment lookup:** retrieves a judgment by its `Master_ID`, or by case number and judicial year; ambiguous case lookups return a compact choice list.
 - **Edge delivery:** renders the home page and individual judgment pages in the Worker, with `GET`, `HEAD`, and `OPTIONS` handling.
 - **Safe caching and CORS:** caches only expected API parameters, separates cache entries for approved origins, and writes cache entries in the background with `ctx.waitUntil()`.
@@ -39,14 +39,22 @@
 
 ## Supported court filters
 
-The API accepts one court ID or a comma-separated list of up to five IDs. The interface currently exposes the following shortcuts:
+The API accepts one court ID or a comma-separated list of up to five IDs. Text search exposes these grouped filters:
 
 | Filter | Court |
 | --- | --- |
-| `1` | محكمة النقض — الدوائر المدنية |
-| `2` | محكمة النقض — الدوائر الجنائية |
-| `3,31` | مجلس الدولة — الإدارية العليا والقضاء الإداري |
-| `4` | المحكمة الدستورية العليا |
+| `1,29` | محكمة النقض — الأحكام المدنية وسوابق النقض المدني |
+| `2,30` | محكمة النقض — الأحكام الجنائية وسوابق النقض الجنائي |
+| `4,25` | المحكمة الدستورية العليا وسوابقها |
+| `3,37` | المحكمة الإدارية العليا وسوابقها |
+| `31,36,47` | القضاء الإداري وسوابقه وأحكام المحكمة الإدارية |
+| `3,31,36,37,47` | مجلس الدولة — جميع المحاكم والسوابق |
+| `21` | المحكمة العليا |
+| `24` | محكمة جنائي عابدين |
+| `35` | أحكام الدعم والإغراق |
+
+The shortcuts combine each court with its matching precedents where available. Text search is limited to numbered legal-principle paragraphs (`Fakra_No > 0`), matching the original program's results.
+Case-number search exposes the individual court datasets, including precedent collections.
 
 ## Architecture
 
@@ -150,7 +158,7 @@ All API responses are JSON. Valid API responses include the security headers con
 ### Search judgments
 
 ```http
-GET /api/search?q={query}&court={courtIds}&page={page}&page_size={pageSize}
+GET /api/search?q={query}&court={courtIds}&page={page}&page_size={pageSize}&sort=newest
 ```
 
 | Parameter | Required | Default | Rules |
@@ -159,11 +167,12 @@ GET /api/search?q={query}&court={courtIds}&page={page}&page_size={pageSize}
 | `court` | No | all courts | One to five positive IDs, comma-separated |
 | `page` | No | `1` | Integer from `1` to `100` |
 | `page_size` | No | `20` | Integer from `5` to `50` |
+| `sort` | No | `newest` | Results are ordered by session date, newest first |
 
 Example:
 
 ```http
-GET /api/search?q=إعلان&court=1&page=1&page_size=20
+GET /api/search?q=إعلان&court=1,29&page=1&page_size=20&sort=newest
 ```
 
 Successful responses have this shape (diagnostic D1 metrics are intentionally omitted from the public response):
