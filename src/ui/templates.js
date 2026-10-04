@@ -302,17 +302,73 @@ select.form-select:focus, input.form-input:focus {
 
 .stats-bar {
   display: none;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
-  margin: 20px 0;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 10px;
+  margin: 18px 0;
 }
 
 .stat-item {
   background: white;
-  border: 1px solid var(--border);
+  border: 1.5px solid var(--border);
   border-radius: var(--radius-md);
-  padding: 12px 16px;
+  padding: 12px 14px;
   box-shadow: var(--shadow-sm);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  text-align: right;
+  position: relative;
+}
+
+.stat-item.interactive {
+  cursor: pointer;
+  user-select: none;
+  font-family: inherit;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  border: 1.5px solid var(--border);
+  outline: none;
+  background: #ffffff;
+}
+
+.stat-item.interactive:hover {
+  transform: translateY(-2px);
+  border-color: var(--primary-light);
+  box-shadow: 0 4px 14px rgba(15, 42, 74, 0.08);
+}
+
+.stat-item.interactive:focus-visible {
+  outline: 2px solid var(--primary-light);
+  outline-offset: 2px;
+}
+
+.stat-item.interactive.active {
+  border-color: var(--primary);
+  background: #f0f7ff;
+  box-shadow: 0 0 0 2px rgba(15, 42, 74, 0.12), 0 4px 12px rgba(15, 42, 74, 0.06);
+}
+
+.stat-item.interactive.active .stat-title {
+  color: var(--primary);
+  font-weight: 700;
+}
+
+.stat-item.interactive.active .stat-digit {
+  color: var(--primary);
+}
+
+.stat-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+.stat-item.interactive.active .stat-badge {
+  color: var(--primary-light);
+  font-weight: 700;
 }
 
 .stat-title {
@@ -891,11 +947,44 @@ ${safeJsonForHtml({
   </header>
 
   ${stats ? `
-  <section class="stats-bar" style="display:grid; margin:0 0 18px;" aria-label="إحصاءات قاعدة الأحكام">
-    <div class="stat-item"><div class="stat-title">الأحكام المتاحة</div><div class="stat-digit">${escapeHtml(stats.judgments.toLocaleString("ar-EG"))}</div></div>
-    <div class="stat-item"><div class="stat-title">المبادئ المستخلصة</div><div class="stat-digit">${escapeHtml(stats.principles.toLocaleString("ar-EG"))}</div></div>
-    <div class="stat-item"><div class="stat-title">المحاكم والدوائر القضائية</div><div class="stat-digit">${escapeHtml(stats.courts.toLocaleString("ar-EG"))}</div></div>
-  </section>` : ""}
+  <div style="margin: 0 0 18px;">
+    <div style="font-size: 0.82rem; font-weight: 700; color: var(--text-muted); margin-bottom: 8px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:6px;">
+      <span>📊 إحصاءات وتصفية الأحكام حسب المحكمة:</span>
+      <span style="font-size:0.75rem; font-weight:600; color:var(--primary-light);">اضغط على أي محكمة للتصفية الفورية</span>
+    </div>
+    <section class="stats-bar court-stats-grid" id="courtStatsBar" style="display:grid;" aria-label="إحصاءات وتصفية المحاكم">
+      <button type="button" class="stat-item interactive active" data-court="" onclick="handleStatItemClick('')" title="عرض وتصفية جميع الأحكام القضائية">
+        <div class="stat-title">جميع المحاكم والدوائر</div>
+        <div class="stat-digit">${escapeHtml(stats.judgments.toLocaleString("ar-EG"))}</div>
+        <div class="stat-badge"><span>🏛️</span><span>عرض الكل</span></div>
+      </button>
+      <button type="button" class="stat-item interactive" data-court="1,29" onclick="handleStatItemClick('1,29')" title="تصفية أحكام وسوابق النقض المدني">
+        <div class="stat-title">النقض المدني</div>
+        <div class="stat-digit">${escapeHtml((stats.civilCount ?? 3).toLocaleString("ar-EG"))}</div>
+        <div class="stat-badge"><span>⚖️</span><span>أحكام وسوابق</span></div>
+      </button>
+      <button type="button" class="stat-item interactive" data-court="2,30" onclick="handleStatItemClick('2,30')" title="تصفية أحكام وسوابق النقض الجنائي">
+        <div class="stat-title">النقض الجنائي</div>
+        <div class="stat-digit">${escapeHtml((stats.criminalCount ?? 2).toLocaleString("ar-EG"))}</div>
+        <div class="stat-badge"><span>📜</span><span>أحكام وسوابق</span></div>
+      </button>
+      <button type="button" class="stat-item interactive" data-court="4,21,25" onclick="handleStatItemClick('4,21,25')" title="تصفية أحكام المحكمة الدستورية العليا">
+        <div class="stat-title">الدستورية العليا</div>
+        <div class="stat-digit">${escapeHtml((stats.constitutionalCount ?? 1).toLocaleString("ar-EG"))}</div>
+        <div class="stat-badge"><span>⚖️</span><span>رقابة دستورية</span></div>
+      </button>
+      <button type="button" class="stat-item interactive" data-court="3,37" onclick="handleStatItemClick('3,37')" title="تصفية أحكام المحكمة الإدارية العليا">
+        <div class="stat-title">الإدارية العليا</div>
+        <div class="stat-digit">${escapeHtml((stats.supremeAdminCount ?? 1).toLocaleString("ar-EG"))}</div>
+        <div class="stat-badge"><span>🏛️</span><span>مجلس الدولة</span></div>
+      </button>
+      <button type="button" class="stat-item interactive" data-court="31,36,47" onclick="handleStatItemClick('31,36,47')" title="تصفية أحكام محكمة القضاء الإداري">
+        <div class="stat-title">القضاء الإداري</div>
+        <div class="stat-digit">${escapeHtml((stats.adminCourtCount ?? 1).toLocaleString("ar-EG"))}</div>
+        <div class="stat-badge"><span>⚖️</span><span>مجلس الدولة</span></div>
+      </button>
+    </section>
+  </div>` : ""}
 
   <section class="search-card" aria-label="أدوات البحث في الأحكام">
     <div class="search-tabs" role="tablist">
@@ -1204,6 +1293,7 @@ function restoreSearchOptions(options) {
   if (options.caseNo || options.caseYear || options.dateFrom || options.dateTo || options.chamber || options.type || options.category) {
     document.querySelector(".advanced-filters").open = true;
   }
+  syncStatButtons(options.courtId || "");
 }
 
 function sortLabel(sort) {
@@ -1214,6 +1304,7 @@ async function executeTextSearch(page = 1, { pushHistory = true, cursor = undefi
   const query = document.getElementById("query").value.trim();
   const searchOptions = selectedSearchOptions();
   const { courtId, scope, mode, sort } = searchOptions;
+  syncStatButtons(courtId || "");
 
   if (!query) {
     showToast("يرجى إدخال نص للبحث أولاً");
@@ -1312,7 +1403,7 @@ function renderSearchResults(data, sort = selectedSearchOptions().sort) {
 
   for (const item of data.results) {
     html += \`
-      <article class="judgment-card">
+      <article class="judgment-card" data-court-id="\${item.Court_ID || ''}">
         <div class="badges-row">
           <span class="law-badge badge-court">\${escapeHtml(item.Court_Name || "محكمة النقض")}</span>
           <span class="law-badge badge-gold">طعن رقم \${escapeHtml(item.Case_No)}</span>
@@ -1363,17 +1454,126 @@ function renderPagination(data) {
   }
 
   nav.style.display = "flex";
+  const isCourtBrowse = !currentSearchState?.query;
+  const prevAction = isCourtBrowse ? ("loadJudgmentsByCourt('" + (currentSearchState?.courtId || "") + "', " + (data.page - 1) + ")") : ("executeTextSearch(" + (data.page - 1) + ")");
+  const nextAction = isCourtBrowse ? ("loadJudgmentsByCourt('" + (currentSearchState?.courtId || "") + "', " + (data.page + 1) + ")") : ("executeTextSearch(" + (data.page + 1) + ")");
+
   nav.innerHTML = \`
-    <button class="pagination-btn" \${data.page <= 1 ? "disabled" : ""} onclick="executeTextSearch(\${data.page - 1})">
+    <button class="pagination-btn" \${data.page <= 1 ? "disabled" : ""} onclick="\${prevAction}">
       <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>
       <span>الصفحة السابقة</span>
     </button>
     <span class="pagination-info">صفحة \${data.page} من \${totalPages}</span>
-    <button class="pagination-btn" \${!data.has_more ? "disabled" : ""} onclick="executeTextSearch(\${data.page + 1})">
+    <button class="pagination-btn" \${!data.has_more ? "disabled" : ""} onclick="\${nextAction}">
       <span>الصفحة التالية</span>
       <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7"/></svg>
     </button>
   \`;
+}
+
+let currentCourtFilter = "";
+
+function syncStatButtons(courtId = "") {
+  currentCourtFilter = courtId || "";
+  document.querySelectorAll(".stat-item.interactive").forEach((btn) => {
+    btn.classList.toggle("active", (btn.dataset.court || "") === (courtId || ""));
+  });
+}
+
+async function handleStatItemClick(courtId) {
+  if (currentCourtFilter === courtId && courtId !== "") {
+    courtId = "";
+  }
+  syncStatButtons(courtId);
+
+  const textSelect = document.getElementById("textCourtId");
+  if (textSelect) textSelect.value = courtId;
+  const caseSelect = document.getElementById("caseCourtId");
+  if (caseSelect) caseSelect.value = courtId;
+
+  const query = document.getElementById("query").value.trim();
+
+  if (query) {
+    executeTextSearch(1);
+    return;
+  }
+
+  const existingCards = document.querySelectorAll(".judgment-card");
+  if (existingCards.length > 0 && currentSearchState?.query) {
+    filterVisibleCards(courtId);
+    return;
+  }
+
+  await loadJudgmentsByCourt(courtId, 1);
+}
+
+function filterVisibleCards(courtId) {
+  const container = document.getElementById("results");
+  if (!container) return;
+  const cards = container.querySelectorAll(".judgment-card");
+  if (!cards.length) return;
+
+  const validCourtIds = courtId ? courtId.split(",").map(Number) : [];
+  let visibleCount = 0;
+  cards.forEach((card) => {
+    const cardCourtId = Number(card.dataset.courtId);
+    const matches = !courtId || validCourtIds.includes(cardCourtId);
+    card.style.display = matches ? "block" : "none";
+    if (matches) visibleCount++;
+  });
+
+  let filterPill = document.getElementById("activeCourtFilterNotice");
+  if (!filterPill) {
+    filterPill = document.createElement("div");
+    filterPill.id = "activeCourtFilterNotice";
+    filterPill.style.cssText = "background:#eff6ff; color:#1e40af; border:1px solid #bfdbfe; padding:10px 16px; border-radius:8px; margin-bottom:16px; font-size:0.9rem; font-weight:600; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;";
+    const headerInfo = container.querySelector(".results-header-info");
+    if (headerInfo) headerInfo.after(filterPill);
+    else container.prepend(filterPill);
+  }
+
+  if (courtId) {
+    const activeBtn = document.querySelector(\`.stat-item.interactive[data-court="\${courtId}"]\`);
+    const courtTitle = activeBtn ? activeBtn.querySelector(".stat-title")?.textContent : "المحكمة المحددة";
+    filterPill.style.display = "flex";
+    filterPill.innerHTML = \`<span>⚖️ تصفية النتائج: تم عرض أحكام <strong>\${escapeHtml(courtTitle)}</strong> (\${visibleCount} حكماً)</span><button type="button" onclick="handleStatItemClick('')" style="background:#dbeafe; border:none; padding:4px 10px; border-radius:4px; color:#1e40af; cursor:pointer; font-weight:700; font-family:inherit;">عرض جميع المحاكم ✕</button>\`;
+  } else {
+    filterPill.style.display = "none";
+  }
+}
+
+async function loadJudgmentsByCourt(courtId = "", page = 1) {
+  const { signal, reqId } = beginRequest();
+  setLoading(true, "جاري استدعاء الأحكام القضائية...");
+
+  try {
+    let endpoint = "/api/court-judgments?page=" + page + "&page_size=20";
+    if (courtId) endpoint += "&court=" + encodeURIComponent(courtId);
+
+    const res = await fetch(endpoint, { signal });
+    const data = await res.json();
+
+    if (reqId !== activeRequestId) return;
+    setLoading(false);
+
+    if (!res.ok || !data.results || !data.results.length) {
+      return showMessage(data.error || "لا توجد أحكام قضائية مسجلة لهذه المحكمة حالياً.");
+    }
+
+    currentSearchState = { query: "", courtId, page, data };
+    const courtBtn = document.querySelector(\`.stat-item.interactive[data-court="\${courtId}"]\`);
+    const courtName = courtBtn ? courtBtn.querySelector(".stat-title")?.textContent : "جميع المحاكم";
+    showStats(data.total_judgments, data.total_matches, "عرض أحكام: " + courtName);
+    renderSearchResults(data, "الأحدث");
+    const resultsContainer = document.getElementById("results");
+    if (resultsContainer) {
+      resultsContainer.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  } catch (err) {
+    if (err.name === "AbortError" || reqId !== activeRequestId) return;
+    setLoading(false);
+    showMessage("حدث خطأ أثناء استدعاء أحكام المحكمة. يرجى إعادة المحاولة.");
+  }
 }
 
 function copySearchResultLink(masterId) {

@@ -9,6 +9,7 @@ import {
   getCourts,
   getJudgmentByCase,
   getJudgmentById,
+  getJudgmentsByCourt,
   recordSearchAnalytics,
   searchJudgments,
 } from "../lib/db.js";
@@ -137,5 +138,28 @@ export async function handleApiJudgment(request, env, url, ctx) {
   } catch (err) {
     console.error("API Judgment Retrieval Failure:", err);
     return jsonResponse({ error: "تعذر استرجاع ملف الحكم القضائي" }, 500, 0, request);
+  }
+}
+
+export async function handleApiCourtJudgments(request, env, url, ctx) {
+  const cached = await matchCache(request);
+  if (cached) return cached;
+  if (await isRateLimited(request, env)) return tooManyRequests(request);
+
+  try {
+    const rawCourts = url.searchParams.get("court") || "";
+    const courtIds = rawCourts
+      ? rawCourts.split(",").map((s) => Number(s.trim())).filter((n) => Number.isSafeInteger(n) && n > 0)
+      : [];
+    const page = Math.max(1, parseInt(url.searchParams.get("page") || "1", 10) || 1);
+    const pageSize = Math.min(50, Math.max(5, parseInt(url.searchParams.get("page_size") || "20", 10) || 20));
+    const sort = url.searchParams.get("sort") === "oldest" ? "oldest" : "newest";
+
+    const data = await getJudgmentsByCourt(env.DB, { courtIds, page, pageSize, sort });
+    const resp = jsonResponse(publicApiData(data), 200, 1800, request);
+    return await storeInCache(request, resp, 1800, ctx);
+  } catch (err) {
+    console.error("API Court Judgments Failure:", err);
+    return jsonResponse({ error: "تعذر استرجاع أحكام المحكمة المطلوبة" }, 500, 0, request);
   }
 }

@@ -7,6 +7,7 @@ const CACHE_PARAM_ALLOWLIST = {
   ],
   "/api/judgment": ["id", "no", "yr", "court"],
   "/api/courts": [],
+  "/api/court-judgments": ["court", "page", "page_size", "sort"],
 };
 
 // Bump this when the search response ordering changes so old Cache API entries
@@ -14,6 +15,7 @@ const CACHE_PARAM_ALLOWLIST = {
 const CACHE_KEY_VERSIONS = {
   "/api/search": "judgment-search-v3",
   "/api/courts": "courts-v1",
+  "/api/court-judgments": "court-judgments-v1",
 };
 
 const SEARCH_DEFAULTS = {
@@ -25,7 +27,7 @@ const SEARCH_DEFAULTS = {
 };
 
 function canonicalValue(pathname, key, value) {
-  if (pathname !== "/api/search") return value;
+  if (pathname !== "/api/search" && pathname !== "/api/court-judgments") return value;
   if (key === "q") return value.trim().replace(/\s+/g, " ");
   if (key === "court") {
     return [...new Set(value.split(",").filter((v) => /^\d+$/.test(v)).map(Number))]

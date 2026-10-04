@@ -260,17 +260,82 @@ export async function getHomeStats(db) {
       ELSE Court_ID 
     END) AS total FROM Courts WHERE Court_ID IN (1, 29, 2, 30, 4, 21, 25, 3, 37, 31, 36, 47)`;
 
+  const courtCountsSql = `SELECT 
+    COALESCE(SUM(CASE WHEN Court_ID IN (1, 29) THEN 1 ELSE 0 END), 0) AS civil,
+    COALESCE(SUM(CASE WHEN Court_ID IN (2, 30) THEN 1 ELSE 0 END), 0) AS criminal,
+    COALESCE(SUM(CASE WHEN Court_ID IN (4, 21, 25) THEN 1 ELSE 0 END), 0) AS constitutional,
+    COALESCE(SUM(CASE WHEN Court_ID IN (3, 37) THEN 1 ELSE 0 END), 0) AS supreme_admin,
+    COALESCE(SUM(CASE WHEN Court_ID IN (31, 36, 47) THEN 1 ELSE 0 END), 0) AS admin_court
+    FROM Judgments_Master`;
+
   const result = await db.batch([
     db.prepare("SELECT COUNT(*) AS total FROM Judgments_Master"),
     db.prepare("SELECT COUNT(*) AS total FROM Judgments_Principles"),
     db.prepare(courtGroupSql),
     db.prepare("SELECT MAX(Case_Date) AS latest FROM Judgments_Master"),
+    db.prepare(courtCountsSql),
   ]);
+
+  const counts = result[4]?.results?.[0] || {};
   return {
     judgments: Number(result[0]?.results?.[0]?.total || 0),
     principles: Number(result[1]?.results?.[0]?.total || 0),
     courts: Number(result[2]?.results?.[0]?.total || 5),
-    latest: result[3]?.results?.[0]?.latest || null
+    latest: result[3]?.results?.[0]?.latest || null,
+    civilCount: Number(counts.civil || 0),
+    criminalCount: Number(counts.criminal || 0),
+    constitutionalCount: Number(counts.constitutional || 0),
+    supremeAdminCount: Number(counts.supreme_admin || 0),
+    adminCourtCount: Number(counts.admin_court || 0),
+  };
+}
+
+export async function getJudgmentsByCourt(db, { courtIds = [], page = 1, pageSize = 20, sort = "newest" } = {}) {
+  let countSql = "SELECT COUNT(*) AS total FROM Judgments_Master AS m";
+  let sql = `SELECT m.Master_ID, m.Case_No, m.Case_Year, m.Office_Year, m.Case_Date, m.Court_ID, m.Master_Text, c.Court_Name
+    FROM Judgments_Master AS m LEFT JOIN Courts AS c ON c.Court_ID = m.Court_ID`;
+  const binds = [];
+  const countBinds = [];
+
+  if (courtIds?.length) {
+    const placeholders = courtIds.map(() => "?").join(",");
+    countSql += ` WHERE m.Court_ID IN (${placeholders})`;
+    sql += ` WHERE m.Court_ID IN (${placeholders})`;
+    countBinds.push(...courtIds);
+    binds.push(...courtIds);
+  }
+
+  const orderDirection = sort === "oldest" ? "ASC" : "DESC";
+  sql += ` ORDER BY m.Case_Year ${orderDirection}, m.Case_No ${orderDirection} LIMIT ? OFFSET ?`;
+  binds.push(pageSize, (page - 1) * pageSize);
+
+  const [countResult, rowsResult] = await Promise.all([
+    db.prepare(countSql).bind(...countBinds).first(),
+    db.prepare(sql).bind(...binds).all(),
+  ]);
+
+  const total = Number(countResult?.total || 0);
+  const rows = rowsResult.results || [];
+
+  const results = rows.map((r) => ({
+    Master_ID: r.Master_ID,
+    Case_No: r.Case_No,
+    Case_Year: r.Case_Year,
+    Office_Year: r.Office_Year,
+    Case_Date: r.Case_Date,
+    Court_ID: r.Court_ID,
+    Court_Name: r.Court_Name,
+    matches: r.Master_Text ? [{ fakraLabel: "ملخص / وقائع الدعوى", snippet: r.Master_Text.slice(0, 300) + (r.Master_Text.length > 300 ? "..." : "") }] : []
+  }));
+
+  return {
+    found: total > 0,
+    page,
+    page_size: pageSize,
+    total_judgments: total,
+    total_matches: total,
+    has_more: total > page * pageSize,
+    results,
   };
 }
 

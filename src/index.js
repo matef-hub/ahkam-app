@@ -1,5 +1,5 @@
 import { SECURITY_HEADERS, handleOptions } from "./lib/security.js";
-import { handleApiSearch, handleApiJudgment, handleApiCourts } from "./routes/api.js";
+import { handleApiSearch, handleApiJudgment, handleApiCourts, handleApiCourtJudgments } from "./routes/api.js";
 import { handleRobotsTxt, handleSitemap } from "./routes/seo.js";
 import { renderHomePageHtml, renderJudgmentPageHtml } from "./ui/templates.js";
 import { getHomeStats, getJudgmentById } from "./lib/db.js";
@@ -77,6 +77,9 @@ export default {
     }
     if (url.pathname === "/api/courts") {
       return finish(await handleApiCourts(request, env, ctx));
+    }
+    if (url.pathname === "/api/court-judgments") {
+      return finish(await handleApiCourtJudgments(request, env, url, ctx));
     }
 
     const judgmentMatch = url.pathname.match(/^\/judgment\/(\d+)$/);
