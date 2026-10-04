@@ -3,9 +3,13 @@ const TASHKEEL_REGEX = /[\u064B-\u065F\u0670]/g;
 const TATWEEL_REGEX = /\u0640/g;
 const ARABIC_LETTER = /[\u0621-\u064A\u0671-\u06D3]/;
 const SEARCH_TOKEN_MIN_LENGTH = 2;
-const MAX_VARIANTS_PER_TOKEN = 30;
+const MAX_VARIANTS_PER_TOKEN = 10;
 
-export const MAX_SEARCH_UNITS = 10;
+export const MAX_SEARCH_UNITS = 12;
+export const MAX_SEARCH_QUERY_LENGTH = 280;
+export const MAX_FTS_EXPRESSION_LENGTH = 2048;
+
+export const ARABIC_PREFIX_RE = /^(?:[وف])?(?:بال|كال|لل|ال|[بكل])?/;
 
 export function stripTashkeelAndTatweel(text) {
   if (!text) return "";
@@ -18,9 +22,11 @@ export function normalizeArabic(text) {
   if (!text) return "";
   return stripTashkeelAndTatweel(text)
     .replace(/[أإآٱ]/g, "ا")
-    .replace(/ة/g, "ه")
     .replace(/ى/g, "ي")
     .replace(/[ؤئ]/g, "ء")
+    .replace(/ة/g, "ه")
+    .replace(/[٠-٩]/g, (digit) => String(digit.charCodeAt(0) - 0x0660))
+    .replace(/[۰-۹]/g, (digit) => String(digit.charCodeAt(0) - 0x06F0))
     .replace(/[\u060C\u061B\u061F.,;:!?"'()[\]{}\\/]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
@@ -35,10 +41,6 @@ export function escapeHtml(value) {
     .replace(/'/g, "&#039;");
 }
 
-/**
- * Safe JSON serializer for embedding JSON inside an HTML <script> block.
- * JSON.stringify alone does not protect against a literal </script> sequence.
- */
 export function safeJsonForHtml(value) {
   return JSON.stringify(value)
     .replace(/</g, "\\u003c")
@@ -48,14 +50,20 @@ export function safeJsonForHtml(value) {
     .replace(/\u2029/g, "\\u2029");
 }
 
-function cleanFtsText(text) {
-  return stripTashkeelAndTatweel(String(text ?? ""))
-    // Quotes, wildcard and column-filter characters are never meaningful in user
-    // input; removing them also prevents a stray " from leaking into a token.
-    .replace(/[\u060C\u061B\u061F.,;:!?(){}[\]\\/"*^]/g, " ")
+export function cleanFtsText(text) {
+  let cleaned = stripTashkeelAndTatweel(String(text ?? ""))
+    .replace(/[\u060C\u061B\u061F.,;:!?(){}[\]\\/*^~]/g, " ")
     .replace(/(^|\s)[-+]+(?=\S)/g, "$1")
     .replace(/\s+/g, " ")
     .trim();
+
+  // موازنة أو إزالة علامات التنصيص الفردية التي قد تكسر استعلام FTS5
+  const quoteCount = (cleaned.match(/"/g) || []).length;
+  if (quoteCount % 2 !== 0) {
+    cleaned = cleaned.replace(/"/g, " ");
+  }
+
+  return cleaned.trim();
 }
 
 function quoteFtsPhrase(text) {
@@ -64,71 +72,29 @@ function quoteFtsPhrase(text) {
   return `"${cleaned}"`;
 }
 
-/**
- * Remove ONE leading article/preposition group from an Arabic word and return
- * the stem. Stripping never leaves fewer than 3 letters.
- *   الإعلان -> إعلان | والإعلان -> إعلان | بالإعلان -> إعلان | للإعلان -> إعلان
- */
 export function stripArabicPrefix(word) {
   const w = String(word ?? "");
-  const m = w.match(/^[وف]?(?:بال|كال|لل|ال)/);
-  if (m && w.length - m[0].length >= 3) return w.slice(m[0].length);
-  if (w.length > 3 && w.startsWith("و")) return w.slice(1);
-  return w;
+  const stripped = w.replace(ARABIC_PREFIX_RE, "");
+  return stripped.length >= 2 ? stripped : w;
 }
 
-// Prefix forms in priority order. If the variant cap is reached, the rarer
-// forms at the end are the ones that are dropped.
-const PREFIX_FORMS = ["", "ال", "وال", "بال", "لل", "ولل", "وبال", "كال", "فال", "و", "ب", "ل"];
-
-function spellingAlternates(word) {
-  const finals = new Set([word]);
-  if (word.endsWith("ة")) finals.add(`${word.slice(0, -1)}ه`);
-  if (word.endsWith("ه")) finals.add(`${word.slice(0, -1)}ة`);
-  if (word.endsWith("ي")) finals.add(`${word.slice(0, -1)}ى`);
-  if (word.endsWith("ى")) finals.add(`${word.slice(0, -1)}ي`);
-
-  const out = new Set();
-  for (const f of finals) {
-    out.add(f);
-    if (/[ؤئء]/.test(f)) {
-      for (const seat of ["ئ", "ؤ", "ء"]) out.add(f.replace(/[ؤئء]/g, seat));
-    }
-  }
-  return Array.from(out);
-}
+const PREFIX_FORMS = ["", "ال", "و", "ف", "بال", "كال", "لل", "وال", "ب", "ل"];
 
 function buildTokenVariants(rawToken) {
-  const raw = cleanFtsText(rawToken);
-  if (raw.length < SEARCH_TOKEN_MIN_LENGTH) return [];
+  const normalized = normalizeArabic(cleanFtsText(rawToken));
+  if (normalized.length < SEARCH_TOKEN_MIN_LENGTH) return [];
+  if (!ARABIC_LETTER.test(normalized)) return [normalized];
 
-  // Non-Arabic tokens (numbers, Latin words) never receive Arabic prefixes.
-  if (!ARABIC_LETTER.test(raw)) return [raw];
+  const core = stripArabicPrefix(normalized);
+  if (core.length < SEARCH_TOKEN_MIN_LENGTH) return [normalized];
 
-  const normalized = normalizeArabic(raw);
-  const seeds = Array.from(new Set([raw, normalized].filter((s) => s.length >= SEARCH_TOKEN_MIN_LENGTH)));
+  const variants = new Set([
+    normalized,
+    core,
+    ...PREFIX_FORMS.map((prefix) => `${prefix}${core}`)
+  ]);
 
-  const variants = new Set(seeds); // exactly what the user typed always comes first
-
-  const cores = [];
-  const seenCores = new Set();
-  for (const seed of seeds) {
-    for (const alt of spellingAlternates(stripArabicPrefix(seed))) {
-      if (!seenCores.has(alt) && alt.length >= SEARCH_TOKEN_MIN_LENGTH) {
-        seenCores.add(alt);
-        cores.push(alt);
-      }
-    }
-  }
-
-  for (const prefix of PREFIX_FORMS) {
-    for (const core of cores) {
-      if (variants.size >= MAX_VARIANTS_PER_TOKEN) return Array.from(variants);
-      variants.add(`${prefix}${core}`);
-    }
-  }
-
-  return Array.from(variants);
+  return Array.from(variants).slice(0, MAX_VARIANTS_PER_TOKEN);
 }
 
 function buildTokenFtsQuery(token) {
@@ -143,77 +109,89 @@ function buildTokenFtsQuery(token) {
   return expressions.length === 1 ? expressions[0] : `(${expressions.join(" OR ")})`;
 }
 
-function parseQuotedAndUnquoted(rawQuery) {
+export function parseSearchQuery(rawQuery, requestedMode = "normal") {
   const raw = String(rawQuery ?? "").trim();
   const units = [];
   const seen = new Set();
-  let remaining = raw;
+  let containsOr = false;
+  const tokenPattern = /(?:^|\s)(-)?(?:"([^"\n]{1,160})"|([^\s"]+))/g;
   let match;
-  const quotedRegex = /"([^"\n]{1,160})"/g;
 
-  while ((match = quotedRegex.exec(raw)) !== null) {
-    const phrase = cleanFtsText(match[1]);
-    if (phrase) {
-      const key = `phrase:${phrase}`;
-      if (!seen.has(key)) {
-        seen.add(key);
-        units.push({ type: "phrase", value: phrase });
-      }
+  while ((match = tokenPattern.exec(raw)) !== null) {
+    const excluded = Boolean(match[1]);
+    const quoted = match[2];
+    const bare = match[3];
+    if (!quoted && /^(?:OR|\|)$/i.test(bare)) {
+      containsOr = true;
+      continue;
     }
-    remaining = remaining.replace(match[0], " ");
-  }
+    if (!quoted && /^(?:AND|\+)$/i.test(bare)) continue;
 
-  const plainTokens = remaining
-    .replace(/[+|،,]/g, " ")
-    .split(/\s+/)
-    .flatMap((token) => cleanFtsText(token).split(" "))
-    .filter(Boolean);
-
-  for (const token of plainTokens) {
-    const normalized = normalizeArabic(token);
+    const value = cleanFtsText(quoted ?? bare);
+    const normalized = normalizeArabic(value);
     if (!normalized || normalized.length < SEARCH_TOKEN_MIN_LENGTH) continue;
-    const key = `term:${normalized}`;
+
+    const type = quoted !== undefined ? "phrase" : "term";
+    const key = `${excluded ? "-" : "+"}:${type}:${normalized}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    units.push({ type: "term", value: token, normalized });
+    units.push({ type, value, normalized, excluded });
   }
 
-  return units;
-}
-
-export function getSearchUnits(rawQuery) {
-  return parseQuotedAndUnquoted(rawQuery);
-}
-
-export function buildFts5Query(rawQuery) {
-  const units = parseQuotedAndUnquoted(rawQuery);
-  if (!units.length || units.length > MAX_SEARCH_UNITS) return null;
-
-  const queries = [];
-  for (const unit of units) {
-    const ftsQuery = unit.type === "phrase" ? quoteFtsPhrase(unit.value) : buildTokenFtsQuery(unit.value);
-    if (ftsQuery) queries.push(ftsQuery);
+  let mode = requestedMode;
+  if (mode === "normal" && containsOr) mode = "or";
+  if (mode === "exact") {
+    const phrase = cleanFtsText(raw.replace(/(^|\s)-\S+/g, " ").replace(/"/g, " "));
+    const normalized = normalizeArabic(phrase);
+    if (normalized) {
+      return {
+        mode,
+        units: [{ type: "phrase", value: normalized, normalized, excluded: false }],
+        excluded: units.filter((unit) => unit.excluded),
+      };
+    }
   }
 
-  if (!queries.length || queries.length > MAX_SEARCH_UNITS) return null;
-
-  // Each query is independently matched against FTS. The DB layer then
-  // requires all units at the judgment level, even when they occur in
-  // different paragraphs.
   return {
-    queries,
-    unit_count: queries.length,
+    mode,
+    units: units.filter((unit) => !unit.excluded),
+    excluded: units.filter((unit) => unit.excluded),
+  };
+}
+
+export function getSearchUnits(rawQuery, mode = "normal") {
+  return parseSearchQuery(rawQuery, mode).units;
+}
+
+export function buildFts5Query(rawQuery, requestedMode = "normal") {
+  const parsed = parseSearchQuery(rawQuery, requestedMode);
+  if (!parsed.units.length || parsed.units.length > MAX_SEARCH_UNITS) return null;
+
+  const toFts = (unit) => unit.type === "phrase"
+    ? quoteFtsPhrase(normalizeArabic(unit.value))
+    : buildTokenFtsQuery(unit.value);
+  const positiveQueries = parsed.units.map(toFts).filter(Boolean);
+  const excludedQueries = parsed.excluded.map(toFts).filter(Boolean);
+  const expressionLength = [...positiveQueries, ...excludedQueries]
+    .reduce((total, expression) => total + expression.length, 0);
+
+  if (!positiveQueries.length || expressionLength > MAX_FTS_EXPRESSION_LENGTH) return null;
+
+  return {
+    queries: positiveQueries,
+    positiveQueries,
+    excludedQueries,
+    units: parsed.units,
+    mode: parsed.mode,
+    unit_count: positiveQueries.length,
     max_units: MAX_SEARCH_UNITS,
   };
 }
 
 /* ------------------------------------------------------------------ */
-/* Highlighting                                                        */
+/* Highlighting & Snippet Extraction                                   */
 /* ------------------------------------------------------------------ */
 
-// Builds the normalized text plus a map from every normalized UTF-16 unit back
-// to its index in the original string. Characters that lowercase to more than
-// one unit are mapped unit-by-unit so offsets can never drift.
 function createOffsetMap(original) {
   const map = [];
   let normalized = "";
@@ -237,7 +215,7 @@ function createOffsetMap(original) {
 }
 
 function buildMatchers(query) {
-  const units = parseQuotedAndUnquoted(query);
+  const units = parseSearchQuery(query).units;
   const matchers = [];
   const seen = new Set();
 
@@ -252,11 +230,9 @@ function buildMatchers(query) {
   return matchers;
 }
 
-// Mirrors what the FTS query matches: the query stem, with or without a
-// leading article/preposition, followed by any suffix (prefix search).
 function wordMatches(word, matcher) {
   const core = stripArabicPrefix(word);
-  if (matcher.core.length < 3) return core === matcher.core || word === matcher.full;
+  if (matcher.core.length < 2) return core === matcher.core || word === matcher.full;
   return core.startsWith(matcher.core) || word.startsWith(matcher.full);
 }
 

@@ -5,7 +5,13 @@ import {
   SECURITY_HEADERS,
   getCorsHeaders,
 } from "../lib/security.js";
-import { searchJudgments, getJudgmentById, getJudgmentByCase } from "../lib/db.js";
+import {
+  getCourts,
+  getJudgmentByCase,
+  getJudgmentById,
+  recordSearchAnalytics,
+  searchJudgments,
+} from "../lib/db.js";
 import { matchCache, storeInCache } from "../lib/cache.js";
 
 const CACHEABLE = new Set([200, 404]);
@@ -63,23 +69,40 @@ function judgmentResult(data, request, ctx) {
 }
 
 export async function handleApiSearch(request, env, url, ctx) {
-  const cached = await matchCache(request);
-  if (cached) return cached;
-
   const validation = validateSearchQuery(url);
   if (!validation.valid) {
     return jsonResponse({ error: validation.error }, 400, 0, request);
   }
 
+  const cached = await matchCache(request);
+  if (cached) return cached;
+
   if (await isRateLimited(request, env)) return tooManyRequests(request);
 
   try {
     const data = await searchJudgments(env.DB, validation);
+    const analytics = recordSearchAnalytics(env.DB, validation, data.total_judgments || 0);
+    if (ctx && typeof ctx.waitUntil === "function") ctx.waitUntil(analytics);
+    else await analytics;
     const resp = jsonResponse(publicApiData(data), 200, 1800, request);
     return await storeInCache(request, resp, 1800, ctx);
   } catch (err) {
     console.error("API Search Failure:", err);
     return jsonResponse({ error: "تعذر إتمام عملية البحث في الفهرس السحابي" }, 500, 0, request);
+  }
+}
+
+export async function handleApiCourts(request, env, ctx) {
+  const cached = await matchCache(request);
+  if (cached) return cached;
+  if (await isRateLimited(request, env)) return tooManyRequests(request);
+  try {
+    const courts = await getCourts(env.DB);
+    const resp = jsonResponse({ courts }, 200, 3600, request);
+    return await storeInCache(request, resp, 3600, ctx);
+  } catch (err) {
+    console.error("API Courts Failure:", err);
+    return jsonResponse({ error: "تعذر تحميل قائمة المحاكم" }, 500, 0, request);
   }
 }
 

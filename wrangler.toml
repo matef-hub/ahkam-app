@@ -1,12 +1,27 @@
 name = "legal-api"
 main = "src/index.js"
 compatibility_date = "2026-09-01"
+workers_dev = false
 
 routes = [
   { pattern = "ahkam.app", custom_domain = true }
 ]
 
+[observability]
+enabled = true
+head_sampling_rate = 0.1
+
 [[d1_databases]]
 binding = "DB"
 database_name = "egypt-judgments"
 database_id = "22485ae3-e83c-47c5-8181-0b50f4129eb1"
+
+# The namespace is account-scoped. Keep this value stable after the first
+# deploy so all isolates share one rolling limit for anonymous API requests.
+[[ratelimits]]
+name = "SEARCH_LIMITER"
+namespace_id = "26041001"
+
+  [ratelimits.simple]
+  limit = 120
+  period = 60

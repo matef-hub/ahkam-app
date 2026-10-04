@@ -30,11 +30,12 @@
 
 ## Capabilities
 
-- **Arabic-aware search:** normalizes diacritics, tatweel, Arabic-Indic and Persian digits, Hamza forms, Ta Marbuta/Ha, and Alef Maksura/Ya. It also expands common prefix forms before building FTS5 queries.
-- **Focused results:** searches numbered legal-principle paragraphs, lists judgments from newest to oldest by session date, then uses the judicial year and case number to break ties. Judgments without a parseable date follow dated results. Each result includes at most three matching excerpts.
+- **Arabic-aware search:** normalizes diacritics, tatweel, Alef/Hamza forms, and Alef Maksura/Ya in a rebuildable FTS projection, while preserving original text for display. It deliberately does not collapse Ta Marbuta and Ha.
+- **Judgment-level relevance:** FTS retrieves candidates, then D1 groups them by `Master_ID`, so an AND query can match terms in different sections of the same judgment. The default scope includes `Master_Text` plus all text sections; each result has at most three SQL-ranked excerpts.
+- **Search controls:** supports normal/AND, OR, exact phrase, exclusion, full/principles/reasons scopes, relevance/newest/oldest ordering, and validated court, case, date, chamber, type, and category filters.
 - **Judgment lookup:** retrieves a judgment by its `Master_ID`, or by case number and judicial year; ambiguous case lookups return a compact choice list.
 - **Edge delivery:** renders the home page and individual judgment pages in the Worker, with `GET`, `HEAD`, and `OPTIONS` handling.
-- **Safe caching and CORS:** caches only expected API parameters, separates cache entries for approved origins, and writes cache entries in the background with `ctx.waitUntil()`.
+- **Safe operations:** uses canonical cache keys, prepared statements, security headers, request IDs, CORS allowlisting, Workers rate limiting, and privacy-aware zero-result analytics.
 - **Search-engine support:** provides `robots.txt`, a sitemap index when needed, and paginated sitemap documents.
 
 ## Supported court filters
@@ -53,7 +54,7 @@ The API accepts one court ID or a comma-separated list of up to five IDs. Text s
 | `24` | محكمة جنائي عابدين |
 | `35` | أحكام الدعم والإغراق |
 
-The shortcuts combine each court with its matching precedents where available. Text search is limited to numbered legal-principle paragraphs (`Fakra_No > 0`), matching the original program's results.
+The shortcuts combine each court with its matching precedents where available. The default text-search scope is the full judgment; users can restrict it to principles or reasons/verdict.
 Case-number search exposes the individual court datasets, including precedent collections.
 
 ## Architecture
@@ -93,7 +94,11 @@ The Worker reads an existing D1 database. The optimization migrations in `migrat
 | `Judgments_Principles` | Extracted legal principles |
 | `Judgments_Principles_Links` | Links between principles and paragraphs |
 | `Courts` | Court names |
-| `FTS_Judgments` | SQLite FTS5 search index containing `Master_ID` and `Fakra_ID` |
+| `FTS_Judgments` | Legacy paragraph FTS5 index retained for compatibility |
+| `FTS_Judgments_Normalized` | Rebuildable normalized retrieval index for full-judgment search |
+| `Judgment_Metadata` | Additive searchable metadata: chamber/type/category/source/provenance |
+| `Judgment_Relations` | Additive editorial and future semantic relations |
+| `Search_Analytics` | Privacy-aware query-quality telemetry |
 
 The migrations add composite lookup indexes and remove redundant duplicates. Apply them only after importing or provisioning the base database.
 
@@ -131,7 +136,7 @@ The migrations add composite lookup indexes and remove redundant duplicates. App
 ### Run locally
 
 ```bash
-# Install and start Wrangler without adding a package manifest to the repository.
+npm test
 npx wrangler dev
 ```
 
@@ -158,21 +163,27 @@ All API responses are JSON. Valid API responses include the security headers con
 ### Search judgments
 
 ```http
-GET /api/search?q={query}&court={courtIds}&page={page}&page_size={pageSize}&sort=newest
+GET /api/search?q={query}&court={courtIds}&page={page}&page_size={pageSize}&sort=relevance&mode=normal&scope=full
 ```
 
 | Parameter | Required | Default | Rules |
 | --- | --- | --- | --- |
 | `q` | Yes | — | 2–160 characters; up to 10 parsed search units |
 | `court` | No | all courts | One to five positive IDs, comma-separated |
-| `page` | No | `1` | Integer from `1` to `100` |
+| `page` | No | `1` | Integer from `1` to `10,000`; kept for stable URLs |
 | `page_size` | No | `20` | Integer from `5` to `50` |
-| `sort` | No | `newest` | Results are ordered by session date, newest first |
+| `sort` | No | `relevance` | `relevance`, `newest`, or `oldest` |
+| `mode` | No | `normal` | `normal`, `and`, `or`, or `exact` |
+| `scope` | No | `full` | `full`, `principles`, or `reasons` |
+| `cursor` | No | — | Opaque cursor returned as `next_cursor` for efficient forward traversal |
+| `case_no`, `case_year`, `date_from`, `date_to`, `chamber`, `type`, `category` | No | — | Validated advanced filters |
+
+`q` accepts 2–280 characters and up to 12 parsed search units.
 
 Example:
 
 ```http
-GET /api/search?q=إعلان&court=1,29&page=1&page_size=20&sort=newest
+GET /api/search?q=إعلان&court=1,29&page=1&page_size=20&sort=relevance&scope=full
 ```
 
 Successful responses have this shape (diagnostic D1 metrics are intentionally omitted from the public response):

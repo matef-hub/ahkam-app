@@ -1,362 +1,269 @@
-import { buildFts5Query, extractSnippetAndHighlight } from "./arabic.js";
+import { buildFts5Query, extractSnippetAndHighlight, normalizeArabic } from "./arabic.js";
 
 const MAX_SNIPPETS_PER_JUDGMENT = 3;
+const NORMALIZED_FTS_TABLE = "FTS_Judgments_Normalized";
+const SEARCH_CURSOR_VERSION = 1;
 
-function buildHitCte(ftsSpec) {
-  // The original program searches numbered legal principles, not judgment
-  // headers or the full reasons/verdict paragraph (Fakra_No <= 0).
-  return ftsSpec.queries.map((_, index) => `
-    SELECT FTS_Judgments.Master_ID, FTS_Judgments.Fakra_ID, rank AS p_rank, ${index} AS term_no
-    FROM FTS_Judgments
-    JOIN Judgments_Text AS searchable_text
-      ON searchable_text.Fakra_ID = FTS_Judgments.Fakra_ID
-      AND searchable_text.Fakra_No > 0
-    WHERE FTS_Judgments MATCH ?
+function scopePredicate(scope, textAlias = "t", ftsAlias = "f") {
+  switch (scope) {
+    case "principles": return `${ftsAlias}.Section_Kind = 'text' AND ${textAlias}.Fakra_No > 0`;
+    case "reasons": return `${ftsAlias}.Section_Kind = 'text' AND ${textAlias}.Fakra_No IN (-2, -50)`;
+    default: return "1 = 1";
+  }
+}
+
+function buildHitSelects(queries, scope, termOffset = 0) {
+  const scopeSql = scopePredicate(scope, "t", "f");
+  return queries.map((_, index) => `
+    SELECT f.Master_ID, f.Fakra_ID, rank AS p_rank, ${index + termOffset} AS term_no, COALESCE(t.Fakra_No, -100) AS Fakra_No
+    FROM ${NORMALIZED_FTS_TABLE} AS f
+    LEFT JOIN Judgments_Text AS t ON t.Fakra_ID = f.Fakra_ID
+    WHERE ${NORMALIZED_FTS_TABLE} MATCH ? AND ${scopeSql}
   `).join(" UNION ALL ");
 }
 
-function buildJudgmentAggregationSql(ftsSpec) {
-  const hitCte = buildHitCte(ftsSpec);
+function dateSortExpression(alias = "m") {
   return `
-    WITH hits AS (
-      ${hitCte}
-    ),
-    by_judgment AS (
-      SELECT
-        h.Master_ID,
-        COUNT(DISTINCT h.term_no) AS matched_terms,
-        MIN(h.p_rank) AS best_rank,
-        COUNT(DISTINCT h.Fakra_ID) AS actual_match_count
-      FROM hits h
-      GROUP BY h.Master_ID
-    )
-  `;
+    CASE
+      WHEN ${alias}.Case_Date GLOB '[0-9][0-9][0-9][0-9]-[0-9]*-[0-9]*'
+      THEN CAST(substr(${alias}.Case_Date, 1, 4) AS INTEGER) * 10000 +
+        CAST(substr(${alias}.Case_Date, 6, instr(substr(${alias}.Case_Date, 6), '-') - 1) AS INTEGER) * 100 +
+        CAST(substr(${alias}.Case_Date, 6 + instr(substr(${alias}.Case_Date, 6), '-')) AS INTEGER)
+      ELSE 0
+    END`;
 }
 
-export async function searchJudgments(db, { query, courtIds = [], page, pageSize }) {
-  const ftsSpec = buildFts5Query(query);
-  if (!ftsSpec) {
-    return {
-      found: false,
-      page,
-      page_size: pageSize,
-      total_matches: 0,
-      total_judgments: 0,
-      has_more: false,
-      results: [],
-      d1_metrics: { rows_read: 0, duration_ms: 0 }
-    };
+function appendFilters(filters, binds) {
+  const clauses = [];
+  if (filters.courtIds?.length) {
+    // دعم فلتر مجلس الدولة المشترك (3 و 31) أو أي قائمة محاكم
+    clauses.push(`m.Court_ID IN (${filters.courtIds.map(() => "?").join(",")})`);
+    binds.push(...filters.courtIds);
   }
+  if (filters.caseNo !== null && filters.caseNo !== undefined) { clauses.push("m.Case_No = ?"); binds.push(filters.caseNo); }
+  if (filters.caseYear !== null && filters.caseYear !== undefined) { clauses.push("m.Case_Year = ?"); binds.push(filters.caseYear); }
+  if (filters.dateFrom) { clauses.push("m.Case_Date >= ?"); binds.push(filters.dateFrom); }
+  if (filters.dateTo) { clauses.push("m.Case_Date <= ?"); binds.push(filters.dateTo); }
 
-  const offset = (page - 1) * pageSize;
-  const unitBinds = [...ftsSpec.queries];
-
-  const baseCte = buildJudgmentAggregationSql(ftsSpec);
-
-  let countSql = `${baseCte}
-    SELECT
-      COUNT(*) AS total_judgments,
-      COALESCE(SUM(actual_match_count), 0) AS total_matches
-    FROM by_judgment b
-    JOIN Judgments_Master m ON m.Master_ID = b.Master_ID
-    WHERE b.matched_terms = ?`;
-  const countBinds = [...unitBinds, ftsSpec.unit_count];
-
-  if (courtIds.length) {
-    countSql += ` AND m.Court_ID IN (${courtIds.map(() => "?").join(",")})`;
-    countBinds.push(...courtIds);
+  for (const field of ["chamber", "type", "category"]) {
+    if (!filters[field]) continue;
+    clauses.push(`EXISTS (SELECT 1 FROM Judgment_Metadata AS md
+      WHERE md.Master_ID = m.Master_ID AND md.Field_Name = '${field}' AND md.Field_Value = ?)`);
+    binds.push(filters[field]);
   }
+  return clauses;
+}
 
-  let pagedSql = `${baseCte}
-    SELECT
-      b.Master_ID,
-      b.best_rank,
-      b.actual_match_count,
-      b.matched_terms,
-      m.Case_Year,
-      m.Case_No,
-      CASE
-        WHEN m.Case_Date GLOB '[0-9][0-9][0-9][0-9]-[0-9]-[0-9]'
-          OR m.Case_Date GLOB '[0-9][0-9][0-9][0-9]-[0-9]-[0-9][0-9]'
-          OR m.Case_Date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9]'
-          OR m.Case_Date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'
-        THEN
-          CAST(substr(m.Case_Date, 1, 4) AS INTEGER) * 10000 +
-          CAST(substr(
-            m.Case_Date,
-            6,
-            instr(substr(m.Case_Date, 6), '-') - 1
-          ) AS INTEGER) * 100 +
-          CAST(substr(
-            m.Case_Date,
-            6 + instr(substr(m.Case_Date, 6), '-')
-          ) AS INTEGER)
-        ELSE NULL
-      END AS case_date_sort
-    FROM by_judgment b
-    JOIN Judgments_Master m ON m.Master_ID = b.Master_ID
-    WHERE b.matched_terms = ?`;
-  const pagedBinds = [...unitBinds, ftsSpec.unit_count];
+function buildSearchCte(ftsSpec, scope) {
+  const positiveHits = buildHitSelects(ftsSpec.positiveQueries, scope);
+  const excludedHits = ftsSpec.excludedQueries.length
+    ? buildHitSelects(ftsSpec.excludedQueries, scope)
+    : "SELECT NULL AS Master_ID WHERE 0";
+  const phraseTerms = ftsSpec.units.map((unit, index) => unit.type === "phrase" ? index : null).filter((index) => index !== null);
+  const phrasePredicate = phraseTerms.length ? `CASE WHEN h.term_no IN (${phraseTerms.join(",")}) THEN 1 ELSE 0 END` : "0";
+  
+  return `
+    WITH hits AS (${positiveHits}),
+    excluded_masters AS (SELECT DISTINCT Master_ID FROM (${excludedHits})),
+    by_judgment AS (
+      SELECT h.Master_ID,
+        COUNT(DISTINCT h.term_no) AS matched_terms,
+        MIN(h.p_rank) AS best_rank,
+        COUNT(DISTINCT h.Fakra_ID) AS actual_match_count,
+        SUM(${phrasePredicate}) AS phrase_hits,
+        SUM(CASE WHEN h.Fakra_No > 0 THEN 1 ELSE 0 END) AS principle_hits
+      FROM hits AS h 
+      GROUP BY h.Master_ID
+      LIMIT 1000
+    ),
+    ranked AS (
+      SELECT b.Master_ID, b.matched_terms, b.best_rank, b.actual_match_count, b.phrase_hits, b.principle_hits,
+        m.Case_No, m.Case_Year, m.Case_Date, m.Office_Year, m.Court_ID,
+        ${dateSortExpression("m")} AS case_date_sort
+      FROM by_judgment AS b JOIN Judgments_Master AS m ON m.Master_ID = b.Master_ID
+      WHERE b.matched_terms ${ftsSpec.mode === "or" ? ">= 1" : "="} ?
+        AND NOT EXISTS (SELECT 1 FROM excluded_masters AS x WHERE x.Master_ID = b.Master_ID)`;
+}
 
-  if (courtIds.length) {
-    pagedSql += ` AND m.Court_ID IN (${courtIds.map(() => "?").join(",")})`;
-    pagedBinds.push(...courtIds);
-  }
+function orderBy(sort, reversed = false) {
+  const down = reversed ? "ASC" : "DESC";
+  const up = reversed ? "DESC" : "ASC";
+  if (sort === "newest") return `case_date_sort ${down}, Case_Year ${down}, Case_No ${down}, Master_ID ${down}`;
+  if (sort === "oldest") return `case_date_sort ${up}, Case_Year ${up}, Case_No ${up}, Master_ID ${up}`;
+  return `phrase_hits ${down}, matched_terms ${down}, actual_match_count ${down}, best_rank ${up}, principle_hits ${down}, case_date_sort ${down}, Master_ID ${down}`;
+}
 
-  pagedSql += `
-    ORDER BY
-      CASE WHEN case_date_sort IS NULL THEN 1 ELSE 0 END ASC,
-      case_date_sort DESC,
-      m.Case_Year DESC,
-      m.Case_No DESC,
-      m.Master_ID DESC
-    LIMIT ? OFFSET ?`;
-  pagedBinds.push(pageSize, offset);
+function cursorFields(row, sort) {
+  if (sort === "newest" || sort === "oldest") return [row.case_date_sort, row.Case_Year ?? 0, row.Case_No ?? 0, row.Master_ID];
+  return [row.phrase_hits ?? 0, row.matched_terms ?? 0, row.actual_match_count ?? 0, Number(row.best_rank ?? 0), row.principle_hits ?? 0, row.case_date_sort ?? 0, row.Master_ID];
+}
+
+function keysetPredicate(sort, cursor, binds) {
+  if (!cursor?.values?.length) return "";
+  const fields = sort === "relevance"
+    ? ["phrase_hits", "matched_terms", "actual_match_count", "best_rank", "principle_hits", "case_date_sort", "Master_ID"]
+    : ["case_date_sort", "Case_Year", "Case_No", "Master_ID"];
+  if (cursor.values.length !== fields.length) return "";
+  const ascending = sort === "oldest";
+  const branches = fields.map((field, index) => {
+    const equal = fields.slice(0, index).map((prior) => `${prior} = ?`);
+    const isRank = sort === "relevance" && field === "best_rank";
+    binds.push(...cursor.values.slice(0, index), cursor.values[index]);
+    return `(${[...equal, `${field}${ascending || isRank ? ">" : "<"} ?`].join(" AND ")})`;
+  });
+  return ` AND (${branches.join(" OR ")})`;
+}
+
+export function encodeSearchCursor(row, sort) {
+  const json = JSON.stringify({ v: SEARCH_CURSOR_VERSION, sort, values: cursorFields(row, sort) });
+  return btoa(unescape(encodeURIComponent(json))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+function labelForParagraph(number) {
+  if (number === -100) return "ملخص الحكم والوقائع";
+  if (number === 0) return "هيئة المحكمة والديباجة";
+  if (number === -2) return "الوقائع والأسباب والمنطوق";
+  if (number === -50) return "منطوق الحكم المستخلص";
+  return `المبدأ / الفقرة (${number})`;
+}
+
+export async function searchJudgments(db, options) {
+  const { query, mode = "normal", scope = "full", sort = "relevance", page = 1, pageSize = 20, cursor = null } = options;
+  const ftsSpec = buildFts5Query(query, mode);
+  if (!ftsSpec) return { found: false, page, page_size: pageSize, total_matches: 0, total_judgments: 0, has_more: false, results: [] };
+
+  const baseCte = buildSearchCte(ftsSpec, scope);
+  const searchBinds = [...ftsSpec.positiveQueries, ...ftsSpec.excludedQueries, ftsSpec.mode === "or" ? 1 : ftsSpec.unit_count];
+  const filterBinds = [];
+  const filterClauses = appendFilters(options, filterBinds);
+  const closedCte = `${baseCte}${filterClauses.length ? ` AND ${filterClauses.join(" AND ")}` : ""}\n    )`;
+  const countSql = `${closedCte} SELECT COUNT(*) AS total_judgments, COALESCE(SUM(actual_match_count), 0) AS total_matches FROM ranked`;
+
+  const cursorBinds = [];
+  const cursorSql = keysetPredicate(sort, cursor, cursorBinds);
+  const pagedSql = `${closedCte}
+    SELECT r.*, c.Court_Name FROM ranked AS r LEFT JOIN Courts AS c ON c.Court_ID = r.Court_ID
+    WHERE 1 = 1${cursorSql} ORDER BY ${orderBy(sort)} LIMIT ?${cursor ? "" : " OFFSET ?"}`;
+  const offset = cursor ? 0 : (page - 1) * pageSize;
+  const pagedBinds = [...searchBinds, ...filterBinds, ...cursorBinds, pageSize + 1];
+  if (!cursor) pagedBinds.push(offset);
 
   const [countResult, pagedResult] = await db.batch([
-    db.prepare(countSql).bind(...countBinds),
+    db.prepare(countSql).bind(...searchBinds, ...filterBinds),
     db.prepare(pagedSql).bind(...pagedBinds),
   ]);
-
-  let totalRowsRead = (countResult?.meta?.rows_read || 0) + (pagedResult?.meta?.rows_read || 0);
-  let totalDuration = (countResult?.meta?.duration || 0) + (pagedResult?.meta?.duration || 0);
-
-  const countRow = countResult?.results?.[0] || {};
-  const totalJudgments = Number(countRow.total_judgments || 0);
-  const totalMatches = Number(countRow.total_matches || 0);
-  const matchedMasters = pagedResult?.results || [];
+  const count = countResult?.results?.[0] || {};
+  const totalJudgments = Number(count.total_judgments || 0);
+  const totalMatches = Number(count.total_matches || 0);
+  const allMasters = pagedResult?.results || [];
+  const matchedMasters = allMasters.slice(0, pageSize);
 
   if (!matchedMasters.length) {
     return {
-      found: false,
-      page,
-      page_size: pageSize,
-      total_matches: totalMatches,
-      total_judgments: totalJudgments,
-      has_more: false,
-      results: [],
-      d1_metrics: {
-        rows_read: totalRowsRead,
-        duration_ms: Math.round(totalDuration * 100) / 100
-      }
+      found: false, page, page_size: pageSize, total_matches: totalMatches, total_judgments: totalJudgments,
+      has_more: false, next_cursor: null, results: []
     };
   }
 
-  const masterIds = matchedMasters.map((r) => r.Master_ID);
-  const inPlaceholders = masterIds.map(() => "?").join(",");
-
-  const masterDetailsSql = `
-    SELECT
-      m.Master_ID,
-      m.Case_No,
-      m.Case_Year,
-      m.Case_Date,
-      m.Office_Year,
-      c.Court_Name
-    FROM Judgments_Master m
-    LEFT JOIN Courts c ON c.Court_ID = m.Court_ID
-    WHERE m.Master_ID IN (${inPlaceholders})
-  `;
-
-  // Get only the top three matching paragraphs per judgment inside SQL.
-  // A paragraph matching several search units is de-duplicated first.
-  const snippetsCte = buildHitCte(ftsSpec);
-  const snippetBinds = [
-    ...ftsSpec.queries,
-    ...masterIds,
-    MAX_SNIPPETS_PER_JUDGMENT
-  ];
-
-  // Rebuild the SQL placeholder order so the IN (...) filter appears inside deduped
-  // after the FTS MATCH parameters.
-  const orderedSnippetSql = `
-    WITH hits AS (
-      ${snippetsCte}
-    ),
+  const masterIds = matchedMasters.map((row) => row.Master_ID);
+  const idPlaceholders = masterIds.map(() => "?").join(",");
+  const snippetsSql = `
+    WITH hits AS (${buildHitSelects(ftsSpec.positiveQueries, scope)}),
     deduped AS (
-      SELECT
-        Master_ID,
-        Fakra_ID,
-        MIN(p_rank) AS p_rank
-      FROM hits
-      WHERE Master_ID IN (${inPlaceholders})
-      GROUP BY Master_ID, Fakra_ID
-    ),
-    ranked AS (
-      SELECT
-        d.Master_ID,
-        d.Fakra_ID,
-        d.p_rank,
-        ROW_NUMBER() OVER (
-          PARTITION BY d.Master_ID
-          ORDER BY d.p_rank ASC, d.Fakra_ID ASC
-        ) AS rn
-      FROM deduped d
+      SELECT Master_ID, Fakra_ID, MIN(p_rank) AS p_rank FROM hits
+      WHERE Master_ID IN (${idPlaceholders}) GROUP BY Master_ID, Fakra_ID
+    ), ranked_snippets AS (
+      SELECT d.Master_ID, d.Fakra_ID, d.p_rank,
+        ROW_NUMBER() OVER (PARTITION BY d.Master_ID ORDER BY d.p_rank ASC, d.Fakra_ID ASC) AS rn FROM deduped AS d
     )
-    SELECT
-      r.Master_ID,
-      r.Fakra_ID,
-      t.Fakra_Text,
-      t.Fakra_No,
-      r.p_rank
-    FROM ranked r
-    JOIN Judgments_Text t ON t.Fakra_ID = r.Fakra_ID
-    WHERE r.rn <= ?
-    ORDER BY r.Master_ID ASC, r.p_rank ASC, r.Fakra_ID ASC
-  `;
+    SELECT r.Master_ID, COALESCE(t.Fakra_No, -100) AS Fakra_No,
+      COALESCE(t.Fakra_Text, m.Master_Text) AS Fakra_Text, r.p_rank FROM ranked_snippets AS r
+    JOIN Judgments_Master AS m ON m.Master_ID = r.Master_ID
+    LEFT JOIN Judgments_Text AS t ON t.Fakra_ID = r.Fakra_ID WHERE r.rn <= ?
+    ORDER BY r.Master_ID ASC, r.p_rank ASC, r.Fakra_ID ASC`;
+  const snippetsResult = await db.prepare(snippetsSql).bind(...ftsSpec.positiveQueries, ...masterIds, MAX_SNIPPETS_PER_JUDGMENT).all();
 
-  const [detailsBatch, snippetsBatch] = await db.batch([
-    db.prepare(masterDetailsSql).bind(...masterIds),
-    db.prepare(orderedSnippetSql).bind(...snippetBinds),
-  ]);
-
-  totalRowsRead += (detailsBatch?.meta?.rows_read || 0) + (snippetsBatch?.meta?.rows_read || 0);
-  totalDuration += (detailsBatch?.meta?.duration || 0) + (snippetsBatch?.meta?.duration || 0);
-
-  const masterDetailsRows = detailsBatch?.results || [];
-  const snippetsRows = snippetsBatch?.results || [];
-
-  const masterMap = new Map(masterDetailsRows.map((m) => [m.Master_ID, m]));
-  const snippetsMap = new Map();
-  for (const s of snippetsRows) {
-    if (!snippetsMap.has(s.Master_ID)) snippetsMap.set(s.Master_ID, []);
-    snippetsMap.get(s.Master_ID).push(s);
-  }
-
-  const results = [];
-  for (const row of matchedMasters) {
-    const mId = row.Master_ID;
-    const master = masterMap.get(mId);
-    if (!master) continue;
-
-    const rawSnippets = snippetsMap.get(mId) || [];
-    const formattedMatches = rawSnippets.map((snip) => {
-      let label = `مبدأ رقم ${snip.Fakra_No}`;
-      if (snip.Fakra_No === 0) label = "هيئة المحكمة والديباجة";
-      else if (snip.Fakra_No === -2) label = "أسباب ومنطوق الحكم";
-      else if (snip.Fakra_No === -50) label = "منطوق الحكم المستخلص";
-
-      return {
-        Fakra_No: snip.Fakra_No,
-        fakraLabel: label,
-        snippet: extractSnippetAndHighlight(snip.Fakra_Text, query),
-      };
-    });
-
-    results.push({
-      Master_ID: mId,
-      Case_No: master.Case_No,
-      Case_Year: master.Case_Year,
-      Case_Date: master.Case_Date,
-      Office_Year: master.Office_Year,
-      Court_Name: master.Court_Name || "المحكمة غير محددة",
-      best_rank: row.best_rank,
-      match_count: row.actual_match_count,
-      matches: formattedMatches,
+  const snippetsByMaster = new Map();
+  for (const snippet of snippetsResult?.results || []) {
+    if (!snippetsByMaster.has(snippet.Master_ID)) snippetsByMaster.set(snippet.Master_ID, []);
+    snippetsByMaster.get(snippet.Master_ID).push({
+      Fakra_No: snippet.Fakra_No,
+      fakraLabel: labelForParagraph(snippet.Fakra_No),
+      snippet: extractSnippetAndHighlight(snippet.Fakra_Text, query),
     });
   }
-
+  const results = matchedMasters.map((row) => ({
+    Master_ID: row.Master_ID, Case_No: row.Case_No, Case_Year: row.Case_Year, Case_Date: row.Case_Date,
+    Office_Year: row.Office_Year, Court_Name: row.Court_Name || "المحكمة غير محددة",
+    match_count: row.actual_match_count, matched_terms: row.matched_terms, matches: snippetsByMaster.get(row.Master_ID) || [],
+  }));
+  const hasMore = allMasters.length > pageSize;
   return {
-    found: results.length > 0,
-    page,
-    page_size: pageSize,
-    total_matches: totalMatches,
-    total_judgments: totalJudgments,
-    has_more: offset + results.length < totalJudgments,
-    results,
-    d1_metrics: {
-      rows_read: totalRowsRead,
-      duration_ms: Math.round(totalDuration * 100) / 100
-    }
+    found: true, page, page_size: pageSize, total_matches: totalMatches, total_judgments: totalJudgments,
+    has_more: hasMore, next_cursor: hasMore ? encodeSearchCursor(matchedMasters.at(-1), sort) : null, results
   };
 }
 
 export async function getJudgmentById(db, masterId) {
-  const masterStmt = db.prepare(`
-    SELECT m.Master_ID, m.Case_No, m.Case_Year, m.Office_Year, m.Case_Date, m.Master_Text, c.Court_Name
-    FROM Judgments_Master m
-    LEFT JOIN Courts c ON c.Court_ID = m.Court_ID
-    WHERE m.Master_ID = ?
-    LIMIT 1
-  `).bind(masterId);
-
-  const textsStmt = db.prepare(`
-    SELECT Fakra_ID, Fakra_No, Fakra_Text
-    FROM Judgments_Text
-    WHERE Master_ID = ?
-    ORDER BY
-      CASE
-        WHEN Fakra_No = 0 THEN 1
-        WHEN Fakra_No = -2 THEN 2
-        WHEN Fakra_No = -50 THEN 3
-        WHEN Fakra_No > 0 THEN 4
-        ELSE 5
-      END ASC,
-      Fakra_No ASC,
-      Fakra_ID ASC
-  `).bind(masterId);
-
-  const principlesStmt = db.prepare(`
-    SELECT DISTINCT p.Mogz_ID, p.Mogz_Text
-    FROM Judgments_Principles p
-    JOIN Judgments_Principles_Links l ON l.Mogz_ID = p.Mogz_ID
-    JOIN Judgments_Text t ON t.Fakra_ID = l.Fakra_ID
-    WHERE t.Master_ID = ?
-    ORDER BY p.Mogz_ID ASC
-  `).bind(masterId);
-
-  const batchResults = await db.batch([masterStmt, textsStmt, principlesStmt]);
-
-  const master = batchResults[0]?.results?.[0] || null;
+  const masterStmt = db.prepare(`SELECT m.Master_ID, m.Court_ID, m.Case_No, m.Case_Year, m.Office_Year, m.Case_Date, m.Master_Text, c.Court_Name
+    FROM Judgments_Master AS m LEFT JOIN Courts AS c ON c.Court_ID = m.Court_ID WHERE m.Master_ID = ? LIMIT 1`).bind(masterId);
+  const textsStmt = db.prepare(`SELECT Fakra_ID, Fakra_No, Fakra_Text FROM Judgments_Text WHERE Master_ID = ?
+    ORDER BY CASE WHEN Fakra_No = 0 THEN 1 WHEN Fakra_No = -2 THEN 2 WHEN Fakra_No = -50 THEN 3 WHEN Fakra_No > 0 THEN 4 ELSE 5 END, Fakra_No ASC, Fakra_ID ASC`).bind(masterId);
+  const principlesStmt = db.prepare(`SELECT DISTINCT p.Mogz_ID, p.Mogz_Text FROM Judgments_Principles AS p
+    JOIN Judgments_Principles_Links AS l ON l.Mogz_ID = p.Mogz_ID JOIN Judgments_Text AS t ON t.Fakra_ID = l.Fakra_ID
+    WHERE t.Master_ID = ? ORDER BY p.Mogz_ID ASC`).bind(masterId);
+  const relatedStmt = db.prepare(`SELECT peer.Master_ID, peer.Case_No, peer.Case_Year, peer.Case_Date, c.Court_Name
+    FROM Judgments_Master AS current JOIN Judgments_Master AS peer ON peer.Court_ID = current.Court_ID AND peer.Master_ID <> current.Master_ID
+    LEFT JOIN Courts AS c ON c.Court_ID = peer.Court_ID WHERE current.Master_ID = ?
+    ORDER BY ${dateSortExpression("peer")} DESC, peer.Master_ID DESC LIMIT 5`).bind(masterId);
+  const batch = await db.batch([masterStmt, textsStmt, principlesStmt, relatedStmt]);
+  const master = batch[0]?.results?.[0] || null;
   if (!master) return { found: false };
-
-  const texts = batchResults[1]?.results || [];
-  const principles = batchResults[2]?.results || [];
-
-  const rowsRead = (batchResults[0]?.meta?.rows_read || 0) +
-                   (batchResults[1]?.meta?.rows_read || 0) +
-                   (batchResults[2]?.meta?.rows_read || 0);
-
   return {
-    found: true,
-    master,
-    principles,
-    texts,
-    d1_metrics: { rows_read: rowsRead }
+    found: true, master, texts: batch[1]?.results || [], principles: batch[2]?.results || [], related: batch[3]?.results || []
   };
 }
 
 export async function getJudgmentByCase(db, { caseNo, caseYear, courtId }) {
-  // The lookup deliberately omits Master_Text: when several chambers share the
-  // same case number only a short card per judgment is needed.
-  let sql = `
-    SELECT m.Master_ID, m.Case_No, m.Case_Year, m.Office_Year, m.Case_Date, c.Court_Name
-    FROM Judgments_Master m
-    LEFT JOIN Courts c ON c.Court_ID = m.Court_ID
-    WHERE m.Case_No = ? AND m.Case_Year = ?
-  `;
+  let sql = `SELECT m.Master_ID, m.Case_No, m.Case_Year, m.Office_Year, m.Case_Date, c.Court_Name
+    FROM Judgments_Master AS m LEFT JOIN Courts AS c ON c.Court_ID = m.Court_ID WHERE m.Case_No = ? AND m.Case_Year = ?`;
   const binds = [caseNo, caseYear];
-
-  if (courtId) {
-    sql += ` AND m.Court_ID = ? `;
-    binds.push(courtId);
+  
+  if (courtId === 'state_council' || courtId === '3,31') {
+    sql += " AND m.Court_ID IN (3, 31)";
+  } else if (courtId) { 
+    sql += " AND m.Court_ID = ?"; 
+    binds.push(courtId); 
   }
+  
+  sql += " ORDER BY m.Court_ID ASC, m.Master_ID ASC";
+  const result = await db.prepare(sql).bind(...binds).all();
+  const rows = result.results || [];
+  if (!rows.length) return { found: false };
+  if (rows.length === 1) return getJudgmentById(db, rows[0].Master_ID);
+  return { found: true, multiple: true, judgments: rows };
+}
 
-  sql += ` ORDER BY m.Court_ID ASC, m.Master_ID ASC`;
+export async function getCourts(db) {
+  const result = await db.prepare(`SELECT c.Court_ID, c.Court_Name, COUNT(m.Master_ID) AS judgment_count
+    FROM Courts AS c LEFT JOIN Judgments_Master AS m ON m.Court_ID = c.Court_ID
+    GROUP BY c.Court_ID, c.Court_Name ORDER BY c.Court_Name COLLATE NOCASE, c.Court_ID`).all();
+  return result.results || [];
+}
 
-  const lookupResult = await db.prepare(sql).bind(...binds).all();
-  const rows = lookupResult.results || [];
+export async function getHomeStats(db) {
+  const result = await db.batch([
+    db.prepare("SELECT COUNT(*) AS total FROM Judgments_Master"), db.prepare("SELECT COUNT(*) AS total FROM Judgments_Principles"),
+    db.prepare("SELECT COUNT(*) AS total FROM Courts"), db.prepare("SELECT MAX(Case_Date) AS latest FROM Judgments_Master"),
+  ]);
+  return { judgments: Number(result[0]?.results?.[0]?.total || 0), principles: Number(result[1]?.results?.[0]?.total || 0), courts: Number(result[2]?.results?.[0]?.total || 0), latest: result[3]?.results?.[0]?.latest || null };
+}
 
-  if (rows.length === 0) return { found: false };
-
-  if (rows.length === 1) {
-    return getJudgmentById(db, rows[0].Master_ID);
+export async function recordSearchAnalytics(db, search, resultCount) {
+  try {
+    await db.prepare(`INSERT INTO Search_Analytics (Query_Text, Normalized_Query, Court_Filter, Result_Count, Created_At)
+      VALUES (?, ?, ?, ?, datetime('now'))`).bind(search.query, normalizeArabic(search.query), search.courtIds?.join(",") || null, resultCount).run();
+  } catch (error) {
+    console.warn("Search analytics write skipped", error?.message || error);
   }
-
-  return {
-    found: true,
-    multiple: true,
-    judgments: rows,
-    d1_metrics: { rows_read: lookupResult?.meta?.rows_read || 0 }
-  };
 }

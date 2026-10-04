@@ -175,13 +175,52 @@ body {
 
 .search-form {
   display: grid;
-  grid-template-columns: minmax(260px, 300px) 1fr auto;
+  grid-template-columns: repeat(4, minmax(150px, 1fr));
   gap: 12px;
   align-items: center;
 }
 
+.search-form:not(.case-form) .input-group {
+  grid-column: span 3;
+}
+
 .search-form.case-form {
   grid-template-columns: minmax(240px, 280px) 1fr 1fr auto;
+}
+
+.advanced-filters {
+  grid-column: 1 / -1;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+
+.advanced-filters summary {
+  cursor: pointer;
+  color: var(--primary);
+  font-weight: 800;
+}
+
+.advanced-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(140px, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.advanced-filter-grid label {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.advanced-filter-grid input {
+  width: 100%;
+  margin-top: 4px;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-main);
+  font: inherit;
 }
 
 .input-group {
@@ -599,6 +638,16 @@ select.form-select:focus, input.form-input:focus {
   text-align: justify;
 }
 
+a.principle-box {
+  display: block;
+  text-decoration: none;
+}
+
+a.principle-box:hover, a.principle-box:focus-visible {
+  border-color: var(--primary-light);
+  outline: none;
+}
+
 .fakra-row {
   padding: 18px 0;
   border-bottom: 1px solid var(--border);
@@ -768,13 +817,15 @@ select.form-select:focus, input.form-input:focus {
 
 @media (max-width: 820px) {
   .search-form, .search-form.case-form { grid-template-columns: 1fr; }
+  .search-form:not(.case-form) .input-group { grid-column: auto; }
+  .advanced-filter-grid { grid-template-columns: 1fr; }
   .stats-bar { grid-template-columns: 1fr; }
   .footer-grid { grid-template-columns: 1fr; gap: 28px; }
   .toast-msg { right: 16px; left: 16px; bottom: 16px; justify-content: center; }
 }
 `;
 
-export function renderHomePageHtml() {
+export function renderHomePageHtml(stats = null) {
   return `<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -839,6 +890,13 @@ ${safeJsonForHtml({
     </div>
   </header>
 
+  ${stats ? `
+  <section class="stats-bar" style="display:grid; margin:0 0 18px;" aria-label="إحصاءات قاعدة الأحكام">
+    <div class="stat-item"><div class="stat-title">الأحكام المتاحة</div><div class="stat-digit">${escapeHtml(stats.judgments.toLocaleString("ar-EG"))}</div></div>
+    <div class="stat-item"><div class="stat-title">المبادئ المستخلصة</div><div class="stat-digit">${escapeHtml(stats.principles.toLocaleString("ar-EG"))}</div></div>
+    <div class="stat-item"><div class="stat-title">المحاكم المتاحة</div><div class="stat-digit">${escapeHtml(stats.courts.toLocaleString("ar-EG"))}</div></div>
+  </section>` : ""}
+
   <section class="search-card" aria-label="أدوات البحث في الأحكام">
     <div class="search-tabs" role="tablist">
       <button id="tabText" class="tab-btn active" role="tab" aria-selected="true" aria-controls="textSearch" onclick="setMode('text')">
@@ -863,6 +921,24 @@ ${safeJsonForHtml({
         <option value="31,36,47">القضاء الإداري</option>
       </select>
 
+      <select id="searchScope" class="form-select" aria-label="نطاق البحث">
+        <option value="full">كامل الحكم</option>
+        <option value="principles">المبادئ فقط</option>
+        <option value="reasons">الأسباب والمنطوق</option>
+      </select>
+
+      <select id="searchMode" class="form-select" aria-label="نمط البحث">
+        <option value="normal">كل الكلمات</option>
+        <option value="or">أي كلمة</option>
+        <option value="exact">عبارة مطابقة تمامًا</option>
+      </select>
+
+      <select id="searchSort" class="form-select" aria-label="ترتيب النتائج">
+        <option value="relevance">الأكثر صلة</option>
+        <option value="newest">الأحدث</option>
+        <option value="oldest">الأقدم</option>
+      </select>
+
       <div class="input-group">
         <label for="query" class="sr-only">نص البحث القانوني</label>
         <svg class="input-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
@@ -872,6 +948,19 @@ ${safeJsonForHtml({
       <button id="btnTextSearch" class="submit-btn" onclick="executeTextSearch(1)">
         <span>بحث في الأحكام</span>
       </button>
+
+      <details class="advanced-filters">
+        <summary>فلاتر متقدمة</summary>
+        <div class="advanced-filter-grid">
+          <label>رقم الطعن<input id="filterCaseNo" inputmode="numeric" maxlength="7" autocomplete="off"></label>
+          <label>السنة القضائية<input id="filterCaseYear" inputmode="numeric" maxlength="4" autocomplete="off"></label>
+          <label>من تاريخ<input id="filterDateFrom" type="date"></label>
+          <label>إلى تاريخ<input id="filterDateTo" type="date"></label>
+          <label>الدائرة<input id="filterChamber" maxlength="120" autocomplete="off"></label>
+          <label>النوع<input id="filterType" maxlength="120" autocomplete="off"></label>
+          <label>المجال / التصنيف<input id="filterCategory" maxlength="120" autocomplete="off"></label>
+        </div>
+      </details>
     </div>
 
     <!-- Case Search Form -->
@@ -885,7 +974,6 @@ ${safeJsonForHtml({
         <option value="3">المحكمة الإدارية العليا</option>
         <option value="31">أحكام القضاء الإداري</option>
         <option value="21">المحكمة العليا</option>
-        <option value="24">محكمة جنائي عابدين</option>
         <option value="25">سوابق المحكمة الدستورية العليا</option>
         <option value="29">سوابق النقض المدني</option>
         <option value="30">سوابق النقض الجنائي</option>
@@ -987,6 +1075,7 @@ let activeController = null;
 let activeRequestId = 0;
 let currentSearchState = null;
 let currentJudgment = null;
+const searchCursors = new Map();
 
 // Arabic-Indic (٠-٩) and Persian (۰-۹) digits -> ASCII, so "٩٥" works as 95.
 function toAsciiDigits(value) {
@@ -1085,9 +1174,54 @@ function showMessage(msg) {
   hideStats();
 }
 
-async function executeTextSearch(page = 1, { pushHistory = true } = {}) {
+function searchStateKey(query, options) {
+  return [query, options.courtId, options.scope, options.mode, options.sort, options.caseNo, options.caseYear,
+    options.dateFrom, options.dateTo, options.chamber, options.type, options.category].join("\u001f");
+}
+
+function selectedSearchOptions() {
+  return {
+    courtId: document.getElementById("textCourtId").value,
+    scope: document.getElementById("searchScope").value,
+    mode: document.getElementById("searchMode").value,
+    sort: document.getElementById("searchSort").value,
+    caseNo: document.getElementById("filterCaseNo").value.trim(),
+    caseYear: document.getElementById("filterCaseYear").value.trim(),
+    dateFrom: document.getElementById("filterDateFrom").value,
+    dateTo: document.getElementById("filterDateTo").value,
+    chamber: document.getElementById("filterChamber").value.trim(),
+    type: document.getElementById("filterType").value.trim(),
+    category: document.getElementById("filterCategory").value.trim(),
+  };
+}
+
+function restoreSearchOptions(options) {
+  const courtSelect = document.getElementById("textCourtId");
+  courtSelect.dataset.selectedCourt = options.courtId || "";
+  courtSelect.value = options.courtId || "";
+  document.getElementById("searchScope").value = options.scope || "full";
+  document.getElementById("searchMode").value = options.mode || "normal";
+  document.getElementById("searchSort").value = options.sort || "relevance";
+  document.getElementById("filterCaseNo").value = options.caseNo || "";
+  document.getElementById("filterCaseYear").value = options.caseYear || "";
+  document.getElementById("filterDateFrom").value = options.dateFrom || "";
+  document.getElementById("filterDateTo").value = options.dateTo || "";
+  document.getElementById("filterChamber").value = options.chamber || "";
+  document.getElementById("filterType").value = options.type || "";
+  document.getElementById("filterCategory").value = options.category || "";
+  if (options.caseNo || options.caseYear || options.dateFrom || options.dateTo || options.chamber || options.type || options.category) {
+    document.querySelector(".advanced-filters").open = true;
+  }
+}
+
+function sortLabel(sort) {
+  return ({ relevance: "الأكثر صلة", newest: "الأحدث", oldest: "الأقدم" })[sort] || "الأكثر صلة";
+}
+
+async function executeTextSearch(page = 1, { pushHistory = true, cursor = undefined } = {}) {
   const query = document.getElementById("query").value.trim();
-  const courtId = document.getElementById("textCourtId").value;
+  const searchOptions = selectedSearchOptions();
+  const { courtId, scope, mode, sort } = searchOptions;
 
   if (!query) {
     showToast("يرجى إدخال نص للبحث أولاً");
@@ -1105,8 +1239,23 @@ async function executeTextSearch(page = 1, { pushHistory = true } = {}) {
   }, 2200);
 
   try {
-    let endpoint = "/api/search?q=" + encodeURIComponent(query) + "&page=" + page + "&page_size=20&sort=newest";
+    const stateKey = searchStateKey(query, searchOptions);
+    const effectiveCursor = cursor === undefined ? searchCursors.get(stateKey + "\u001f" + page) : cursor;
+    let endpoint = "/api/search?q=" + encodeURIComponent(query) + "&page=" + page + "&page_size=20" +
+      "&sort=" + encodeURIComponent(sort) + "&mode=" + encodeURIComponent(mode) + "&scope=" + encodeURIComponent(scope);
     if (courtId) endpoint += "&court=" + encodeURIComponent(courtId);
+    if (effectiveCursor) endpoint += "&cursor=" + encodeURIComponent(effectiveCursor);
+    for (const [key, value] of Object.entries({
+      case_no: searchOptions.caseNo,
+      case_year: searchOptions.caseYear,
+      date_from: searchOptions.dateFrom,
+      date_to: searchOptions.dateTo,
+      chamber: searchOptions.chamber,
+      type: searchOptions.type,
+      category: searchOptions.category,
+    })) {
+      if (value) endpoint += "&" + key + "=" + encodeURIComponent(value);
+    }
 
     const res = await fetch(endpoint, { signal });
     const data = await res.json();
@@ -1119,9 +1268,22 @@ async function executeTextSearch(page = 1, { pushHistory = true } = {}) {
       return showMessage(data.error || "تعذر إتمام البحث القضائي.");
     }
 
-    currentSearchState = { query, courtId, page, data };
-    const urlState = "/?q=" + encodeURIComponent(query) + (courtId ? "&court=" + encodeURIComponent(courtId) : "") + "&page=" + page;
-    const state = { type: "search", query, courtId, page };
+    searchCursors.set(stateKey + "\u001f" + page, effectiveCursor || null);
+    if (data.next_cursor) searchCursors.set(stateKey + "\u001f" + (page + 1), data.next_cursor);
+    currentSearchState = { query, ...searchOptions, page, data };
+    const params = new URLSearchParams({ q: query, page: String(page), sort, mode, scope });
+    if (courtId) params.set("court", courtId);
+    for (const [key, value] of Object.entries({
+      case_no: searchOptions.caseNo,
+      case_year: searchOptions.caseYear,
+      date_from: searchOptions.dateFrom,
+      date_to: searchOptions.dateTo,
+      chamber: searchOptions.chamber,
+      type: searchOptions.type,
+      category: searchOptions.category,
+    })) if (value) params.set(key, value);
+    const urlState = "/?" + params.toString();
+    const state = { type: "search", query, ...searchOptions, page };
 
     // Never stack duplicate history entries for the exact same URL.
     if (pushHistory && urlState !== location.pathname + location.search) {
@@ -1130,7 +1292,7 @@ async function executeTextSearch(page = 1, { pushHistory = true } = {}) {
       history.replaceState(state, "", urlState);
     }
 
-    renderSearchResults(data);
+    renderSearchResults(data, sort);
   } catch (err) {
     clearTimeout(slowTimer);
     if (err.name === "AbortError" || reqId !== activeRequestId) return;
@@ -1139,17 +1301,17 @@ async function executeTextSearch(page = 1, { pushHistory = true } = {}) {
   }
 }
 
-function renderSearchResults(data) {
+function renderSearchResults(data, sort = selectedSearchOptions().sort) {
   const container = document.getElementById("results");
   if (!data.results || !data.results.length) {
     return showMessage("لم يتم العثور على أحكام قضائية مطابقة للبحث المطلوب.");
   }
 
-  showStats(data.total_judgments, data.total_matches, "الأحدث إلى الأقدم");
+  showStats(data.total_judgments, data.total_matches, sortLabel(sort));
 
   let html = \`
     <div class="results-header-info">
-      <h2>الأحكام القضائية المستخلصة (صفحة \${data.page} من \${Math.min(Math.ceil(data.total_judgments / data.page_size), 100)})</h2>
+      <h2>الأحكام القضائية المستخلصة (صفحة \${data.page} من \${Math.max(1, Math.ceil(data.total_judgments / data.page_size))})</h2>
       <span style="font-weight:700; color:var(--text-muted); font-size:0.88rem;">
         إجمالي: \${data.total_judgments.toLocaleString("ar-EG")} حكماً (\${data.total_matches.toLocaleString("ar-EG")} موضع تطابق)
       </span>
@@ -1189,6 +1351,7 @@ function renderSearchResults(data) {
             <span>فتح ملف الحكم كاملاً</span>
             <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7"/></svg>
           </a>
+          <button type="button" class="tool-btn" onclick="copySearchResultLink(\${item.Master_ID})">نسخ الرابط</button>
         </div>
       </article>
     \`;
@@ -1200,7 +1363,7 @@ function renderSearchResults(data) {
 
 function renderPagination(data) {
   const nav = document.getElementById("pagination");
-  const totalPages = Math.min(Math.ceil(data.total_judgments / data.page_size), 100);
+  const totalPages = Math.max(1, Math.ceil(data.total_judgments / data.page_size));
 
   if (totalPages <= 1) {
     nav.style.display = "none";
@@ -1214,11 +1377,50 @@ function renderPagination(data) {
       <span>الصفحة السابقة</span>
     </button>
     <span class="pagination-info">صفحة \${data.page} من \${totalPages}</span>
-    <button class="pagination-btn" \${(!data.has_more || data.page >= 100) ? "disabled" : ""} onclick="executeTextSearch(\${data.page + 1})">
+    <button class="pagination-btn" \${!data.has_more ? "disabled" : ""} onclick="executeTextSearch(\${data.page + 1})">
       <span>الصفحة التالية</span>
       <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7"/></svg>
     </button>
   \`;
+}
+
+function copySearchResultLink(masterId) {
+  copyToClipboard(new URL("/judgment/" + masterId, window.location.origin).href, "تم نسخ رابط الحكم");
+}
+
+async function loadCourtOptions() {
+  try {
+    const response = await fetch("/api/courts");
+    if (!response.ok) return;
+    const data = await response.json();
+    if (!Array.isArray(data.courts)) return;
+
+    const textSelect = document.getElementById("textCourtId");
+    const textValue = textSelect.dataset.selectedCourt || textSelect.value;
+    const group = document.createElement("optgroup");
+    group.label = "المحاكم المتاحة";
+    for (const court of data.courts) {
+      const option = document.createElement("option");
+      option.value = String(court.Court_ID);
+      option.textContent = court.Court_Name;
+      group.appendChild(option);
+    }
+    textSelect.appendChild(group);
+    textSelect.value = textValue;
+
+    const caseSelect = document.getElementById("caseCourtId");
+    const caseValue = caseSelect.value;
+    while (caseSelect.options.length > 1) caseSelect.remove(1);
+    for (const court of data.courts) {
+      const option = document.createElement("option");
+      option.value = String(court.Court_ID);
+      option.textContent = court.Court_Name;
+      caseSelect.appendChild(option);
+    }
+    caseSelect.value = caseValue;
+  } catch {
+    // Static court shortcuts remain available if the optional enhancement fails.
+  }
 }
 
 async function navigateToJudgment(event, masterId) {
@@ -1322,6 +1524,15 @@ function renderFullJudgmentView(data) {
     \`;
   }
 
+  if (data.related && data.related.length) {
+    html += '<section aria-labelledby="related-judgments-heading"><h2 id="related-judgments-heading" style="color:var(--primary); font-size:1.2rem; margin:28px 0 12px;">أحكام ذات صلة من المحكمة نفسها</h2><div class="principles-wrapper">';
+    for (const item of data.related) {
+      html += '<a class="principle-box" href="/judgment/' + encodeURIComponent(item.Master_ID) + '" onclick="navigateToJudgment(event, ' + Number(item.Master_ID) + ')">' +
+        escapeHtml(item.Court_Name || "المحكمة") + ' — الطعن رقم ' + escapeHtml(item.Case_No) + ' لسنة ' + escapeHtml(item.Case_Year) +
+        (item.Case_Date ? ' — ' + escapeHtml(item.Case_Date) : '') + '</a>';
+    }
+    html += "</div></section>";
+  }
   html += \`</article>\`;
   container.innerHTML = html;
 }
@@ -1449,13 +1660,17 @@ window.addEventListener("popstate", (e) => {
     loadAndRenderJudgment(e.state.masterId);
   } else if (e.state && e.state.type === "search") {
     document.getElementById("query").value = e.state.query;
-    document.getElementById("textCourtId").value = e.state.courtId || "";
+    restoreSearchOptions(e.state);
     executeTextSearch(e.state.page, { pushHistory: false });
   } else {
     const params = new URLSearchParams(window.location.search);
     if (params.has("q")) {
       document.getElementById("query").value = params.get("q");
-      document.getElementById("textCourtId").value = params.get("court") || "";
+      restoreSearchOptions({
+        courtId: params.get("court"), scope: params.get("scope"), mode: params.get("mode"), sort: params.get("sort"),
+        caseNo: params.get("case_no"), caseYear: params.get("case_year"), dateFrom: params.get("date_from"), dateTo: params.get("date_to"),
+        chamber: params.get("chamber"), type: params.get("type"), category: params.get("category"),
+      });
       executeTextSearch(parseInt(params.get("page") || "1", 10), { pushHistory: false });
     } else {
       cancelActiveRequest();
@@ -1467,10 +1682,15 @@ window.addEventListener("popstate", (e) => {
 });
 
 document.addEventListener("DOMContentLoaded", () => {
+  loadCourtOptions();
   const params = new URLSearchParams(window.location.search);
   if (params.has("q")) {
     document.getElementById("query").value = params.get("q");
-    document.getElementById("textCourtId").value = params.get("court") || "";
+    restoreSearchOptions({
+      courtId: params.get("court"), scope: params.get("scope"), mode: params.get("mode"), sort: params.get("sort"),
+      caseNo: params.get("case_no"), caseYear: params.get("case_year"), dateFrom: params.get("date_from"), dateTo: params.get("date_to"),
+      chamber: params.get("chamber"), type: params.get("type"), category: params.get("category"),
+    });
     executeTextSearch(parseInt(params.get("page") || "1", 10), { pushHistory: false });
   }
   document.getElementById("query").addEventListener("keydown", (e) => {
@@ -1649,6 +1869,14 @@ ${jsonLdHtml}
           <div style="line-height:2.1; margin-top:8px; text-align: justify;">${escapeHtml(t.Fakra_Text)}</div>
         </section>`;
       }).join("")}
+
+      ${data.related && data.related.length ? `
+      <section aria-labelledby="related-judgments-heading">
+        <h2 id="related-judgments-heading" style="color:var(--primary); font-size:1.25rem; margin:28px 0 12px;">أحكام ذات صلة من المحكمة نفسها</h2>
+        <div class="principles-wrapper">
+          ${data.related.map(item => `<a class="principle-box" href="/judgment/${escapeHtml(item.Master_ID)}">${escapeHtml(item.Court_Name || "المحكمة")} — الطعن رقم ${escapeHtml(item.Case_No)} لسنة ${escapeHtml(item.Case_Year)}${item.Case_Date ? ` — ${escapeHtml(item.Case_Date)}` : ""}</a>`).join("")}
+        </div>
+      </section>` : ""}
     </article>
   </main>
 </div>

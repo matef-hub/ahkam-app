@@ -1,15 +1,39 @@
 import { ALLOWED_ORIGINS } from "./security.js";
 
 const CACHE_PARAM_ALLOWLIST = {
-  "/api/search": ["q", "court", "page", "page_size", "sort"],
+  "/api/search": [
+    "q", "court", "page", "page_size", "cursor", "sort", "mode", "scope",
+    "case_no", "case_year", "date_from", "date_to", "chamber", "type", "category",
+  ],
   "/api/judgment": ["id", "no", "yr", "court"],
+  "/api/courts": [],
 };
 
 // Bump this when the search response ordering changes so old Cache API entries
 // cannot continue serving results in the previous order.
 const CACHE_KEY_VERSIONS = {
-  "/api/search": "court-principles-v2",
+  "/api/search": "judgment-search-v3",
+  "/api/courts": "courts-v1",
 };
+
+const SEARCH_DEFAULTS = {
+  page: "1",
+  page_size: "20",
+  sort: "relevance",
+  mode: "normal",
+  scope: "full",
+};
+
+function canonicalValue(pathname, key, value) {
+  if (pathname !== "/api/search") return value;
+  if (key === "q") return value.trim().replace(/\s+/g, " ");
+  if (key === "court") {
+    return [...new Set(value.split(",").filter(/^\d+$/).map(Number))]
+      .sort((a, b) => a - b)
+      .join(",");
+  }
+  return value;
+}
 
 const CACHEABLE_STATUSES = new Set([200, 404]);
 
@@ -26,8 +50,11 @@ export function getCacheKey(request) {
     if (cacheVersion) sortedParams.set("__cache_version", cacheVersion);
 
     for (const key of [...allowed].sort()) {
-      const value = url.searchParams.get(key);
-      if (value !== null && value !== "") sortedParams.set(key, value);
+      const rawValue = url.searchParams.get(key);
+      const value = rawValue === null || rawValue === ""
+        ? SEARCH_DEFAULTS[key]
+        : canonicalValue(url.pathname, key, rawValue);
+      if (value !== undefined && value !== "") sortedParams.set(key, value);
     }
 
     // CORS responses contain Access-Control-Allow-Origin, so each ALLOWED
