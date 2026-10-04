@@ -856,15 +856,11 @@ ${safeJsonForHtml({
       <label for="textCourtId" class="sr-only">اختر المحكمة أو الدائرة</label>
       <select id="textCourtId" class="form-select">
         <option value="">جميع المحاكم والدوائر القضائية</option>
-        <option value="1,29">النقض المدني + سوابق النقض المدني</option>
-        <option value="2,30">النقض الجنائي + سوابق النقض الجنائي</option>
-        <option value="4,25">الدستورية العليا + سوابقها</option>
-        <option value="3,37">الإدارية العليا + سوابقها</option>
-        <option value="31,36,47">القضاء الإداري + سوابقه وأحكام المحكمة الإدارية</option>
-        <option value="3,31,36,37,47">مجلس الدولة (كل المحاكم والسوابق)</option>
-        <option value="21">المحكمة العليا</option>
-        <option value="24">محكمة جنائي عابدين</option>
-        <option value="35">أحكام الدعم والإغراق</option>
+        <option value="1,29">احكام النقض المدنى</option>
+        <option value="2,30">احكام النقض الجنائي</option>
+        <option value="4,25">الدستورية العليا</option>
+        <option value="3,37">الإدارية العليا</option>
+        <option value="31,36,47">القضاء الإداري</option>
       </select>
 
       <div class="input-group">
