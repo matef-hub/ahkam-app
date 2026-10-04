@@ -224,16 +224,15 @@ export async function getJudgmentById(db, masterId) {
   };
 }
 
-export async function getJudgmentByCase(db, { caseNo, caseYear, courtId }) {
+export async function getJudgmentByCase(db, { caseNo, caseYear, courtId, courtIds }) {
   let sql = `SELECT m.Master_ID, m.Case_No, m.Case_Year, m.Office_Year, m.Case_Date, c.Court_Name
     FROM Judgments_Master AS m LEFT JOIN Courts AS c ON c.Court_ID = m.Court_ID WHERE m.Case_No = ? AND m.Case_Year = ?`;
   const binds = [caseNo, caseYear];
   
-  if (courtId === 'state_council' || courtId === '3,31') {
-    sql += " AND m.Court_ID IN (3, 31)";
-  } else if (courtId) { 
-    sql += " AND m.Court_ID = ?"; 
-    binds.push(courtId); 
+  const ids = courtIds && courtIds.length ? courtIds : (courtId ? [courtId] : []);
+  if (ids.length) {
+    sql += ` AND m.Court_ID IN (${ids.map(() => "?").join(",")})`;
+    binds.push(...ids);
   }
   
   sql += " ORDER BY m.Court_ID ASC, m.Master_ID ASC";
@@ -252,11 +251,27 @@ export async function getCourts(db) {
 }
 
 export async function getHomeStats(db) {
+  const courtGroupSql = `SELECT COUNT(DISTINCT CASE 
+      WHEN Court_ID IN (1, 29) THEN 1 
+      WHEN Court_ID IN (2, 30) THEN 2 
+      WHEN Court_ID IN (4, 21, 25) THEN 4 
+      WHEN Court_ID IN (3, 37) THEN 3 
+      WHEN Court_ID IN (31, 36, 47) THEN 5 
+      ELSE Court_ID 
+    END) AS total FROM Courts WHERE Court_ID IN (1, 29, 2, 30, 4, 21, 25, 3, 37, 31, 36, 47)`;
+
   const result = await db.batch([
-    db.prepare("SELECT COUNT(*) AS total FROM Judgments_Master"), db.prepare("SELECT COUNT(*) AS total FROM Judgments_Principles"),
-    db.prepare("SELECT COUNT(*) AS total FROM Courts"), db.prepare("SELECT MAX(Case_Date) AS latest FROM Judgments_Master"),
+    db.prepare("SELECT COUNT(*) AS total FROM Judgments_Master"),
+    db.prepare("SELECT COUNT(*) AS total FROM Judgments_Principles"),
+    db.prepare(courtGroupSql),
+    db.prepare("SELECT MAX(Case_Date) AS latest FROM Judgments_Master"),
   ]);
-  return { judgments: Number(result[0]?.results?.[0]?.total || 0), principles: Number(result[1]?.results?.[0]?.total || 0), courts: Number(result[2]?.results?.[0]?.total || 0), latest: result[3]?.results?.[0]?.latest || null };
+  return {
+    judgments: Number(result[0]?.results?.[0]?.total || 0),
+    principles: Number(result[1]?.results?.[0]?.total || 0),
+    courts: Number(result[2]?.results?.[0]?.total || 5),
+    latest: result[3]?.results?.[0]?.latest || null
+  };
 }
 
 export async function recordSearchAnalytics(db, search, resultCount) {

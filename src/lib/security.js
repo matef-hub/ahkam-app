@@ -4,14 +4,13 @@ export { MAX_SEARCH_UNITS };
 
 export const SECURITY_HEADERS = {
   "X-Content-Type-Options": "nosniff",
-  "X-Frame-Options": "SAMEORIGIN",
   "Referrer-Policy": "strict-origin-when-cross-origin",
   "Permissions-Policy": "camera=(), microphone=(), geolocation=(), browsing-topics=()",
   "Strict-Transport-Security": "max-age=31536000; includeSubDomains; preload",
   // Inline scripts/styles are intentionally required by SSR until the UI is
   // extracted into hashed static assets. User data is never interpolated into
   // executable JS; JSON-LD is encoded with safeJsonForHtml.
-  "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https:; connect-src 'self'; frame-ancestors 'self'; base-uri 'self'; form-action 'self';",
+  "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https:; connect-src 'self'; base-uri 'self'; form-action 'self';",
 };
 
 export const ALLOWED_ORIGINS = new Set(["https://ahkam.app", "https://ahkam.ateflaw.com", "https://ateflaw.com"]);
@@ -150,8 +149,8 @@ export function validateCaseParams(url) {
   const caseNo = parseOptionalPositiveInteger(no, 1000000);
   const caseYear = parseOptionalPositiveInteger(yr, 2100);
   const courts = parseCourtList(readParam(url, "court"));
-  if (!caseNo.ok || !caseYear.ok || !courts.ok || courts.ids.length > 1) return { valid: false, error: "بيانات الطعن أو المحكمة غير صالحة" };
-  return { valid: true, caseNo: caseNo.value, caseYear: caseYear.value, courtId: courts.ids[0] ?? null };
+  if (!caseNo.ok || !caseYear.ok || !courts.ok) return { valid: false, error: "بيانات الطعن أو المحكمة غير صالحة" };
+  return { valid: true, caseNo: caseNo.value, caseYear: caseYear.value, courtIds: courts.ids, courtId: courts.ids[0] ?? null };
 }
 
 export function validateIdParam(url) {

@@ -82,3 +82,21 @@ BEGIN
       'أ', 'ا'), 'إ', 'ا'), 'آ', 'ا'), 'ٱ', 'ا'), 'ى', 'ي'), 'ؤ', 'ء'), 'ئ', 'ء')
   WHERE NEW.Master_Text IS NOT NULL AND length(trim(NEW.Master_Text)) > 0;
 END;
+
+-- إدراج السجلات الموجودة مسبقاً مع دعم إعادة تشغيل الميجريشن بأمان
+INSERT OR REPLACE INTO FTS_Judgments_Normalized (rowid, Fakra_ID, Master_ID, Section_Kind, Fakra_Text)
+SELECT
+  -Master_ID, NULL, Master_ID, 'master',
+  replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(Master_Text,
+    'ـ', ''), 'ً', ''), 'ٌ', ''), 'ٍ', ''), 'َ', ''), 'ُ', ''), 'ِ', ''), 'ّ', ''), 'ْ', ''), 'ٰ', ''),
+    'أ', 'ا'), 'إ', 'ا'), 'آ', 'ا'), 'ٱ', 'ا'), 'ى', 'ي'), 'ؤ', 'ء'), 'ئ', 'ء')
+FROM Judgments_Master
+WHERE Master_Text IS NOT NULL AND length(trim(Master_Text)) > 0;
+
+INSERT OR REPLACE INTO FTS_Judgments_Normalized (rowid, Fakra_ID, Master_ID, Section_Kind, Fakra_Text)
+SELECT
+  Fakra_ID, Fakra_ID, Master_ID, 'text',
+  replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(Fakra_Text,
+    'ـ', ''), 'ً', ''), 'ٌ', ''), 'ٍ', ''), 'َ', ''), 'ُ', ''), 'ِ', ''), 'ّ', ''), 'ْ', ''), 'ٰ', ''),
+    'أ', 'ا'), 'إ', 'ا'), 'آ', 'ا'), 'ٱ', 'ا'), 'ى', 'ي'), 'ؤ', 'ء'), 'ئ', 'ء')
+FROM Judgments_Text;

@@ -4,8 +4,10 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "check": "node --check src/index.js && node --check src/lib/arabic.js && node --check src/lib/cache.js && node --check src/lib/db.js && node --check src/lib/security.js && node --check src/routes/api.js && node --check src/routes/seo.js && node --check src/ui/templates.js",
-    "test": "node --experimental-sqlite --test",
-    "build": "wrangler deploy --dry-run"
+    "dev": "node --experimental-sqlite server.js",
+    "start": "node --experimental-sqlite server.js",
+    "build": "node --check server.js && node --check src/index.js && node --experimental-sqlite --test",
+    "check": "node --check server.js && node --check src/index.js && node --check src/lib/arabic.js && node --check src/lib/cache.js && node --check src/lib/db.js && node --check src/lib/node-db.js && node --check src/lib/security.js && node --check src/routes/api.js && node --check src/routes/seo.js && node --check src/ui/templates.js",
+    "test": "node --experimental-sqlite --test"
   }
 }

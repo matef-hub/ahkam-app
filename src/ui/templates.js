@@ -894,7 +894,7 @@ ${safeJsonForHtml({
   <section class="stats-bar" style="display:grid; margin:0 0 18px;" aria-label="إحصاءات قاعدة الأحكام">
     <div class="stat-item"><div class="stat-title">الأحكام المتاحة</div><div class="stat-digit">${escapeHtml(stats.judgments.toLocaleString("ar-EG"))}</div></div>
     <div class="stat-item"><div class="stat-title">المبادئ المستخلصة</div><div class="stat-digit">${escapeHtml(stats.principles.toLocaleString("ar-EG"))}</div></div>
-    <div class="stat-item"><div class="stat-title">المحاكم المتاحة</div><div class="stat-digit">${escapeHtml(stats.courts.toLocaleString("ar-EG"))}</div></div>
+    <div class="stat-item"><div class="stat-title">المحاكم والدوائر القضائية</div><div class="stat-digit">${escapeHtml(stats.courts.toLocaleString("ar-EG"))}</div></div>
   </section>` : ""}
 
   <section class="search-card" aria-label="أدوات البحث في الأحكام">
@@ -914,11 +914,11 @@ ${safeJsonForHtml({
       <label for="textCourtId" class="sr-only">اختر المحكمة أو الدائرة</label>
       <select id="textCourtId" class="form-select">
         <option value="">جميع المحاكم والدوائر القضائية</option>
-        <option value="1,29">احكام النقض المدنى</option>
-        <option value="2,30">احكام النقض الجنائي</option>
-        <option value="4,25">الدستورية العليا</option>
-        <option value="3,37">الإدارية العليا</option>
-        <option value="31,36,47">القضاء الإداري</option>
+        <option value="1,29">أحكام النقض المدني (الأحكام والسوابق)</option>
+        <option value="2,30">أحكام النقض الجنائي (الأحكام والسوابق)</option>
+        <option value="4,21,25">المحكمة الدستورية العليا (الأحكام والسوابق)</option>
+        <option value="3,37">المحكمة الإدارية العليا (الأحكام والسوابق)</option>
+        <option value="31,36,47">محكمة القضاء الإداري ومجلس الدولة</option>
       </select>
 
       <select id="searchScope" class="form-select" aria-label="نطاق البحث">
@@ -965,22 +965,14 @@ ${safeJsonForHtml({
 
     <!-- Case Search Form -->
     <div id="caseSearch" class="search-form case-form" role="tabpanel" style="display:none;">
-      <label for="caseCourtId" class="sr-only">اختر الدائرة القضائية</label>
+      <label for="caseCourtId" class="sr-only">اختر المحكمة أو الدائرة القضائية</label>
       <select id="caseCourtId" class="form-select">
-        <option value="">جميع الدوائر</option>
-        <option value="1">النقض المدني</option>
-        <option value="2">النقض الجنائي</option>
-        <option value="4">المحكمة الدستورية العليا</option>
-        <option value="3">المحكمة الإدارية العليا</option>
-        <option value="31">أحكام القضاء الإداري</option>
-        <option value="21">المحكمة العليا</option>
-        <option value="25">سوابق المحكمة الدستورية العليا</option>
-        <option value="29">سوابق النقض المدني</option>
-        <option value="30">سوابق النقض الجنائي</option>
-        <option value="35">أحكام الدعم والإغراق</option>
-        <option value="36">سوابق القضاء الإداري</option>
-        <option value="37">سوابق المحكمة الإدارية العليا</option>
-        <option value="47">أحكام المحكمة الإدارية</option>
+        <option value="">جميع المحاكم والدوائر</option>
+        <option value="1,29">أحكام النقض المدني (الأحكام والسوابق)</option>
+        <option value="2,30">أحكام النقض الجنائي (الأحكام والسوابق)</option>
+        <option value="4,21,25">المحكمة الدستورية العليا (الأحكام والسوابق)</option>
+        <option value="3,37">المحكمة الإدارية العليا (الأحكام والسوابق)</option>
+        <option value="31,36,47">محكمة القضاء الإداري ومجلس الدولة</option>
       </select>
 
       <div class="input-group">
@@ -1389,38 +1381,8 @@ function copySearchResultLink(masterId) {
 }
 
 async function loadCourtOptions() {
-  try {
-    const response = await fetch("/api/courts");
-    if (!response.ok) return;
-    const data = await response.json();
-    if (!Array.isArray(data.courts)) return;
-
-    const textSelect = document.getElementById("textCourtId");
-    const textValue = textSelect.dataset.selectedCourt || textSelect.value;
-    const group = document.createElement("optgroup");
-    group.label = "المحاكم المتاحة";
-    for (const court of data.courts) {
-      const option = document.createElement("option");
-      option.value = String(court.Court_ID);
-      option.textContent = court.Court_Name;
-      group.appendChild(option);
-    }
-    textSelect.appendChild(group);
-    textSelect.value = textValue;
-
-    const caseSelect = document.getElementById("caseCourtId");
-    const caseValue = caseSelect.value;
-    while (caseSelect.options.length > 1) caseSelect.remove(1);
-    for (const court of data.courts) {
-      const option = document.createElement("option");
-      option.value = String(court.Court_ID);
-      option.textContent = court.Court_Name;
-      caseSelect.appendChild(option);
-    }
-    caseSelect.value = caseValue;
-  } catch {
-    // Static court shortcuts remain available if the optional enhancement fails.
-  }
+  // Court options are unified into consolidated judicial jurisdictions
+  // (Civil Cassation, Criminal Cassation, Constitutional, and State Council).
 }
 
 async function navigateToJudgment(event, masterId) {

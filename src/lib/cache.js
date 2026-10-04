@@ -28,7 +28,7 @@ function canonicalValue(pathname, key, value) {
   if (pathname !== "/api/search") return value;
   if (key === "q") return value.trim().replace(/\s+/g, " ");
   if (key === "court") {
-    return [...new Set(value.split(",").filter(/^\d+$/).map(Number))]
+    return [...new Set(value.split(",").filter((v) => /^\d+$/.test(v)).map(Number))]
       .sort((a, b) => a - b)
       .join(",");
   }

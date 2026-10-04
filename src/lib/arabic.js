@@ -24,7 +24,6 @@ export function normalizeArabic(text) {
     .replace(/[أإآٱ]/g, "ا")
     .replace(/ى/g, "ي")
     .replace(/[ؤئ]/g, "ء")
-    .replace(/ة/g, "ه")
     .replace(/[٠-٩]/g, (digit) => String(digit.charCodeAt(0) - 0x0660))
     .replace(/[۰-۹]/g, (digit) => String(digit.charCodeAt(0) - 0x06F0))
     .replace(/[\u060C\u061B\u061F.,;:!?"'()[\]{}\\/]/g, " ")
@@ -202,7 +201,6 @@ function createOffsetMap(original) {
 
     let normChar = ch;
     if (ch === "أ" || ch === "إ" || ch === "آ" || ch === "ٱ") normChar = "ا";
-    else if (ch === "ة") normChar = "ه";
     else if (ch === "ى") normChar = "ي";
     else if (ch === "ؤ" || ch === "ئ") normChar = "ء";
 
