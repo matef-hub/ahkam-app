@@ -2,236 +2,270 @@
 
 # ⚖️ أحكام | Ahkam Engine
 
-### **High-Performance Arabic Legal Search Engine & Edge Repository**
+### High-performance Arabic legal search on the edge
 
-[![Platform](https://img.shields.io/badge/Platform-Cloudflare%20Workers-F38020?style=for-the-badge&logo=cloudflare&logoColor=white)](#)
-[![Database](https://img.shields.io/badge/Database-Cloudflare%20D1%20(FTS5)-0051C3?style=for-the-badge&logo=sqlite&logoColor=white)](#)
-[![Language](https://img.shields.io/badge/Language-JavaScript%20(ES2022)-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black)](#)
-[![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](#)
+[![Platform](https://img.shields.io/badge/Platform-Cloudflare%20Workers-F38020?style=for-the-badge&logo=cloudflare&logoColor=white)](#architecture)
+[![Database](https://img.shields.io/badge/Database-Cloudflare%20D1%20(FTS5)-0051C3?style=for-the-badge&logo=sqlite&logoColor=white)](#data-model)
+[![Language](https://img.shields.io/badge/Language-JavaScript%20(ES2022)-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black)](#repository-layout)
+[![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](#license)
 
 <p align="center">
-  <b>A lightweight, edge-native legal research platform tailored for Egyptian jurisprudence.</b><br>
-  Built specifically to conquer Arabic orthographic complexities, clitic morphology, prefix-bound token boundaries, and high-concurrency Edge SQL caching.
+  <b>An edge-native research platform for Egyptian court judgments and legal principles.</b><br>
+  Arabic-aware search, server-rendered judgment pages, Cloudflare D1, and safe edge caching.
 </p>
 
-[✨ Key Capabilities](#-key-capabilities) •
-[🏛️ Supported Courts](#️-supported-courts) •
-[📐 System Architecture](#-system-architecture) •
-[🗄️ Database & Schema](#️-database--schema) •
-[🚀 Quick Start](#-quick-start) •
-[🔌 API Specification](#-api-specification) •
-[🛡️ Security & Performance](#️-security--performance)
-
----
+[Overview](#overview) ·
+[Capabilities](#capabilities) ·
+[Architecture](#architecture) ·
+[Data model](#data-model) ·
+[Quick start](#quick-start) ·
+[API](#api) ·
+[Deployment](#deployment)
 
 </div>
 
-## 🌟 Overview
+## Overview
 
-**أحكام (Ahkam)** delivers sub-millisecond retrieval and intelligent highlighting for Egyptian court rulings and legal maxims (*المبادئ القانونية*). Standard search engines struggle with Arabic clitics, where prepositions, conjunctions, and definite articles fuse directly with noun stems (e.g., `وبالإعلان` for query `إعلان`). 
+**أحكام (Ahkam)** is a Cloudflare Worker for searching Egyptian judgments and their legal principles (*المبادئ القانونية*). It accounts for Arabic orthographic variants and common clitic prefixes—so a query such as `إعلان` can match words such as `وبالإعلان`—then returns safe, highlighted excerpts from a Cloudflare D1 database.
 
-**Ahkam** resolves this at the Edge by pairing custom morphological stemming and variant generation with an optimized **SQLite FTS5** backend deployed globally on **Cloudflare Workers** and **D1**.
+## Capabilities
 
----
+- **Arabic-aware search:** normalizes diacritics, tatweel, Arabic-Indic and Persian digits, Hamza forms, Ta Marbuta/Ha, and Alef Maksura/Ya. It also expands common prefix forms before building FTS5 queries.
+- **Focused results:** ranks judgments by FTS relevance and fetches at most three matching excerpts for each returned judgment.
+- **Judgment lookup:** retrieves a judgment by its `Master_ID`, or by case number and judicial year; ambiguous case lookups return a compact choice list.
+- **Edge delivery:** renders the home page and individual judgment pages in the Worker, with `GET`, `HEAD`, and `OPTIONS` handling.
+- **Safe caching and CORS:** caches only expected API parameters, separates cache entries for approved origins, and writes cache entries in the background with `ctx.waitUntil()`.
+- **Search-engine support:** provides `robots.txt`, a sitemap index when needed, and paginated sitemap documents.
 
-## ✨ Key Capabilities
+## Supported court filters
 
-<table>
-  <tr>
-    <td width="50%">
-      <h3>🔍 Morphology-Aware Search</h3>
-      <ul>
-        <li><b>Prefix-Stripping Engine</b>: Automatically handles clitics (<code>و</code>, <code>ف</code>, <code>ب</code>, <code>ك</code>, <code>ل</code>, <code>ال</code>, <code>بال</code>, <code>كال</code>, <code>لل</code>).</li>
-        <li><b>Stem Variant Permutation</b>: Prioritizes Hamza (<code>أ</code>, <code>إ</code>, <code>آ</code>), Ta Marbuta / Ha (<code>ة</code>/<code>ه</code>), and Alef Maksura / Ya (<code>ى</code>/<code>ي</code>) before prefix application.</li>
-        <li><b>Digit Normalization</b>: Transparently maps Eastern-Arabic (<code>٠-٩</code>) and Persian (<code>۰-۹</code>) numerals to ASCII.</li>
-      </ul>
-    </td>
-    <td width="50%">
-      <h3>⚡ Edge-Native Performance</h3>
-      <ul>
-        <li><b>Bounded Full-Text Scans</b>: 2-tier search pipeline eliminates runaway full-table CTE scans with strict match limits and deterministic tiebreakers (<code>Fakra_No</code>, <code>Fakra_ID</code>).</li>
-        <li><b>Deferred Edge Caching</b>: Cache persistence is offloaded via <code>ctx.waitUntil()</code> to eliminate worker response latency.</li>
-        <li><b>Client Race-Condition Guards</b>: Unified <code>AbortController</code> and monotonic request sequence IDs kill stale asynchronous renders.</li>
-      </ul>
-    </td>
-  </tr>
-  <tr>
-    <td width="50%">
-      <h3>🎯 Precision Highlighting</h3>
-      <ul>
-        <li><b>Token-Level Boundary Scanners</b>: Unicode-safe <code>\p{L}\p{N}_</code> token matching prevents mid-word corruption and broken HTML markup.</li>
-        <li><b>Prefix-Preserved Highlighting</b>: Matches and renders <code>&lt;mark&gt;وبالإعلان&lt;/mark&gt;</code> even when searching for the bare stem <code>إعلان</code>.</li>
-      </ul>
-    </td>
-    <td width="50%">
-      <h3>🛡️ Enterprise Edge Hardening</h3>
-      <ul>
-        <li><b>Cache-Poisoning Defenses</b>: Explicit <code>ALLOWED_ORIGINS</code> gatekeeper prevents cache key inflation via arbitrary <code>Origin</code> headers.</li>
-        <li><b>URL Sanitization</b>: Dynamic query strings are pruned from non-API page cache keys.</li>
-        <li><b>Crawler Resiliency</b>: Symmetric <code>HEAD</code> request support across all public routes.</li>
-      </ul>
-    </td>
-  </tr>
-</table>
+The API accepts one court ID or a comma-separated list of up to five IDs. The interface currently exposes the following shortcuts:
 
----
+| Filter | Court |
+| --- | --- |
+| `1` | محكمة النقض — الدوائر المدنية |
+| `2` | محكمة النقض — الدوائر الجنائية |
+| `3,31` | مجلس الدولة — الإدارية العليا والقضاء الإداري |
+| `4` | المحكمة الدستورية العليا |
 
-## 🏛️ Supported Courts
-
-| ID | Court Designation (Arabic) | Official English Name | Jurisdiction |
-| :---: | :--- | :--- | :--- |
-| `1` | **محكمة النقض** | Court of Cassation | Supreme Civil, Commercial & Criminal Appellate |
-| `3` | **المحكمة الإدارية العليا** | Supreme Administrative Court | State Council (*مجلس الدولة*) Apex Court |
-| `31` | **محكمة القضاء الإداري** | Administrative Judiciary Court | State Council (*مجلس الدولة*) First/Second Instance |
-
-> 💡 *The State Council filter (`state_council` or `3,31`) automatically unions both Court `3` and Court `31`.*
-
----
-
-## 📐 System Architecture
+## Architecture
 
 ```mermaid
 flowchart TD
-    Client([🌐 Client Browser / Crawler]) -->|HTTP GET / HEAD| CF[⚡ Cloudflare Worker Edge]
-    
-    subgraph Edge Layer
-        CF --> SEC{🛡️ Security & Route Guard}
-        SEC -->|Allowed Origin / Clean URL| CACHE[(🗄️ Edge Cache API)]
-        CACHE -->|Cache Hit| ReturnRes[🚀 Instant Response]
-        
-        CACHE -->|Cache Miss| Router{🔀 Route Dispatcher}
-        
-        Router -->|/api/search| SearchH[🔎 Search Handler]
-        Router -->|/api/judgment| DetailH[📄 Judgment Handler]
-        Router -->|/judgment/:id| SSRH[🖥️ SSR HTML Renderer]
-        Router -->|/sitemap*.xml| SEOH[🗺️ SEO Engine]
-    end
+    Client[Browser or crawler] -->|GET / HEAD| Worker[Cloudflare Worker]
+    Worker --> Guard[Route, method, and security guard]
+    Guard --> Routes{Route}
 
-    subgraph Data & Morphology
-        SearchH --> LING[📝 arabic.js: Normalize, Strip Clitics & Expand Variants]
-        LING --> D1[(🗃️ Cloudflare D1 Database)]
-        D1 -->|SQLite FTS5 MATCH| PrinciplesFTS[principles_fts]
-        PrinciplesFTS -->|Bounded Hits| SearchH
-        DetailH --> D1
-        SSRH --> D1
-    end
+    Routes -->|/api/search| Search[Search handler]
+    Routes -->|/api/judgment| Judgment[Judgment handler]
+    Routes -->|/judgment/:id| SSR[SSR judgment page]
+    Routes -->|/robots.txt and /sitemap*.xml| SEO[SEO handler]
+    Routes -->|/| Home[SSR home page]
 
-    SearchH -->|Async Save| BGWorker[ctx.waitUntil Cache Store]
-    SSRH -->|Async Save| BGWorker
-    🗄️ Database & SchemaThe underlying storage utilizes Cloudflare D1 structured with strict constraints and an auxiliary FTS5 virtual table:1. Master Records (judgments_master)SQLCREATE TABLE judgments_master (
-  Master_ID    INTEGER PRIMARY KEY AUTOINCREMENT,
-  Court_ID     INTEGER NOT NULL,
-  Case_Number  INTEGER NOT NULL,
-  Case_Year    INTEGER NOT NULL,
-  Case_Date    TEXT,
-  Master_Text  TEXT
-);
-CREATE INDEX idx_master_case_year_court ON judgments_master (Case_Number, Case_Year, Court_ID);
-2. Legal Principles / Excerpts (principles)SQLCREATE TABLE principles (
-  Fakra_ID     INTEGER PRIMARY KEY AUTOINCREMENT,
-  Master_ID    INTEGER NOT NULL REFERENCES judgments_master(Master_ID),
-  Fakra_No     INTEGER NOT NULL,
-  Fakra_Text   TEXT NOT NULL
-);
-CREATE INDEX idx_links_fakra_mogz ON principles (Master_ID, Fakra_No);
-3. FTS5 Virtual Table (principles_fts)SQLCREATE VIRTUAL TABLE principles_fts USING fts5(
-  Fakra_Text,
-  content='principles',
-  content_rowid='Fakra_ID',
-  tokenize='unicode61'
-);
-📁 Repository Structure.
-├── 📂 migrations/
-│   ├── 0001_indexes.sql             # Baseline schema and composite lookups
-│   ├── 0002_search_indexes.sql      # FTS5 virtual tables and sync triggers
-│   └── 0003_drop_dupes.sql          # Performance cleanup: drops redundant duplicate indexes
-├── 📂 src/
-│   ├── 📄 index.js                  # Worker entry point, HEAD support, security & cache router
-│   ├── 📂 lib/
-│   │   ├── 📄 arabic.js             # Morphological stemmer, clitic stripper, FTS5 builder & snippets
-│   │   ├── 📄 cache.js              # Origin-hardened Cache API wrapper with waitUntil support
-│   │   ├── 📄 db.js                 # D1 query execution, multi-court resolvers, and bounded scans
-│   │   └── 📄 security.js           # Digit normalizer, int parser, CSP, and CORS validation
-│   ├── 📂 routes/
-│   │   ├── 📄 api.js                # RESTful API handlers (/api/search, /api/judgment)
-│   │   └── 📄 seo.js                # Deterministic sitemap pagination and robots.txt generator
-│   └── 📂 ui/
-│       └── 📄 templates.js          # SSR layout, Accessible buttons, Toast alerts & Client App Shell
-├── 📄 PATCH_NOTES.md                # Detailed audit log of bug resolutions and patches
-├── 📄 wrangler.toml                 # Cloudflare Worker deployment configuration
-└── 📄 README.md                     # Comprehensive project documentation
-🚀 Quick StartPrerequisitesNode.js v18.0.0 or higherCloudflare Wrangler CLI1. InstallationBash# Clone the repository
-git clone [https://github.com/your-username/ahkam-app.git](https://github.com/your-username/ahkam-app.git)
-cd ahkam-app
+    Search --> Arabic[Arabic normalization and FTS5 query builder]
+    Arabic --> D1[(Cloudflare D1)]
+    Judgment --> D1
+    SSR --> D1
+    SEO --> D1
 
-# Install project dependencies
-npm install
-2. Local Database InitializationBash# Apply schema migrations to local D1 instance
-npx wrangler d1 migrations apply DB --local
-3. Start Local Edge EnvironmentBash# Launch development worker
+    Search --> Cache[Cloudflare Cache API]
+    Judgment --> Cache
+    SSR --> Cache
+    SEO --> Cache
+```
+
+## Data model
+
+The Worker reads an existing D1 database. The optimization migrations in `migrations/` **do not create or seed the base schema**; they require these tables and FTS index to already exist:
+
+| Object | Used for |
+| --- | --- |
+| `Judgments_Master` | Judgment metadata and full text |
+| `Judgments_Text` | Ordered paragraphs/excerpts |
+| `Judgments_Principles` | Extracted legal principles |
+| `Judgments_Principles_Links` | Links between principles and paragraphs |
+| `Courts` | Court names |
+| `FTS_Judgments` | SQLite FTS5 search index containing `Master_ID` and `Fakra_ID` |
+
+The migrations add composite lookup indexes and remove redundant duplicates. Apply them only after importing or provisioning the base database.
+
+## Repository layout
+
+```text
+.
+├── migrations/
+│   ├── 0001_indexes.sql                 # Initial lookup indexes
+│   ├── 0002_search_indexes.sql          # Additional composite indexes
+│   └── 0003_drop_duplicate_indexes.sql  # Removes superseded indexes
+├── src/
+│   ├── index.js                          # Worker entry point and route dispatch
+│   ├── lib/
+│   │   ├── arabic.js                     # Normalization, variants, FTS5, highlighting
+│   │   ├── cache.js                      # Cache-key and Cache API helpers
+│   │   ├── db.js                         # D1 queries
+│   │   └── security.js                   # Validation, CORS, security headers
+│   ├── routes/
+│   │   ├── api.js                        # JSON API handlers
+│   │   └── seo.js                        # robots.txt and sitemap handlers
+│   └── ui/
+│       └── templates.js                  # Server-rendered HTML and client behavior
+├── wrangler.toml                         # Worker and D1 binding configuration
+└── README.md
+```
+
+## Quick start
+
+### Prerequisites
+
+- A current Node.js release supported by Wrangler.
+- A Cloudflare account with access to the configured D1 database, or a local database initialized with the required base schema and data.
+
+### Run locally
+
+```bash
+# Install and start Wrangler without adding a package manifest to the repository.
 npx wrangler dev
-Navigate to http://localhost:8787 in your browser.🔌 API Specification🔎 Search PrinciplesHTTPGET /api/search?q={query}&courtId={courtId}&page={page}&pageSize={pageSize}
-Query ParametersParameterTypeRequiredDefaultDescriptionqstringYes—Search keywords (e.g., مسئولية, تعويض)courtIdstringNonullTarget court: 1, state_council, or 3,31pagenumberNo1Pagination page indexpageSizenumberNo20Items per page (Max limit: 50)Sample Response (200 OK)JSON{
-  "total": 1,
+```
+
+Wrangler reads the `DB` binding from `wrangler.toml`. Open the local address printed by Wrangler (normally `http://localhost:8787`).
+
+### Apply index migrations
+
+After the base schema has been imported into the target database, apply the repository migrations:
+
+```bash
+# Local D1 database
+npx wrangler d1 migrations apply DB --local
+
+# Bound remote D1 database
+npx wrangler d1 migrations apply DB --remote
+```
+
+> The repository does not include a base-schema or data-import migration. Running these index-only migrations against an empty database will fail because the referenced tables do not yet exist.
+
+## API
+
+All API responses are JSON. Valid API responses include the security headers configured in `src/lib/security.js`. `OPTIONS` requests receive CORS headers only for approved origins.
+
+### Search judgments
+
+```http
+GET /api/search?q={query}&court={courtIds}&page={page}&page_size={pageSize}
+```
+
+| Parameter | Required | Default | Rules |
+| --- | --- | --- | --- |
+| `q` | Yes | — | 2–160 characters; up to 10 parsed search units |
+| `court` | No | all courts | One to five positive IDs, comma-separated |
+| `page` | No | `1` | Integer from `1` to `100` |
+| `page_size` | No | `20` | Integer from `5` to `50` |
+
+Example:
+
+```http
+GET /api/search?q=إعلان&court=1&page=1&page_size=20
+```
+
+Successful responses have this shape (diagnostic D1 metrics are intentionally omitted from the public response):
+
+```json
+{
+  "found": true,
   "page": 1,
-  "pageSize": 20,
+  "page_size": 20,
+  "total_matches": 1,
+  "total_judgments": 1,
+  "has_more": false,
   "results": [
     {
-      "masterId": 1042,
-      "courtId": 1,
-      "caseNumber": 125,
-      "caseYear": 85,
-      "caseDate": "2018-05-12",
-      "fakraId": 4120,
-      "snippet": "... المقرر في قضاء هذه المحكمة أن <mark>الإعلان</mark> بصحيفة الدعوى هو الأساس الذي يبنى عليه ..."
+      "Master_ID": 1042,
+      "Case_No": 125,
+      "Case_Year": 85,
+      "Case_Date": "2018-05-12",
+      "Office_Year": null,
+      "Court_Name": "محكمة النقض",
+      "best_rank": -8.2,
+      "match_count": 1,
+      "matches": [
+        {
+          "Fakra_No": 1,
+          "fakraLabel": "مبدأ رقم 1",
+          "snippet": "… <mark>الإعلان</mark> بصحيفة الدعوى …"
+        }
+      ]
     }
   ]
 }
-📄 Retrieve Judgment DetailsHTTPGET /api/judgment?id={masterId}
-GET /api/judgment?caseNumber={num}&caseYear={year}&courtId={courtId}
-Sample Response (200 OK)JSON{
+```
+
+### Retrieve a judgment
+
+Look up a judgment by its ID:
+
+```http
+GET /api/judgment?id={masterId}
+```
+
+Or locate it by case number and judicial year. `court` is optional here, but when supplied it must be a single ID:
+
+```http
+GET /api/judgment?no={caseNumber}&yr={caseYear}&court={courtId}
+```
+
+A unique match returns `found`, `master`, `texts`, and `principles`. If more than one judgment matches a case-number lookup, the response instead includes `multiple: true` and compact `judgments` records; request one of their `Master_ID` values to fetch the complete record.
+
+```json
+{
   "found": true,
-  "judgment": {
+  "master": {
     "Master_ID": 1042,
-    "Court_ID": 1,
-    "Case_Number": 125,
+    "Case_No": 125,
     "Case_Year": 85,
-    "Case_Date": "2018-05-12",
-    "Master_Text": "حكمت المحكمة بقبول الطعن شكلاً وفي الموضوع...",
-    "principles": [
-      {
-        "Fakra_ID": 4120,
-        "Fakra_No": 1,
-        "Fakra_Text": "المقرر في قضاء هذه المحكمة أن الإعلان بصحيفة الدعوى..."
-      }
-    ]
-  }
+    "Court_Name": "محكمة النقض"
+  },
+  "texts": [],
+  "principles": []
 }
-Sample Not Found (404 Not Found)JSON{
-  "found": false,
-  "error": "الحكم غير موجود"
-}
-🛡️ Security & Performance                                  [ Incoming Request ]
-                                           │
-                                ┌──────────┴──────────┐
-                                ▼                     ▼
-                       [ Origin Whitelisted ]  [ Origin Unknown ]
-                                │                     │
-                        Append to Cache Key     Drop from Cache
-                                │                     │
-                                └──────────┬──────────┘
-                                           │
-                                           ▼
-                                 [ Match Cached Item ]
-                                ┌──────────┴──────────┐
-                                ▼                     ▼
-                             (Hit)                 (Miss)
-                        Return Instantly     Run Bounded FTS Query
-                                                      │
-                                                      ▼
-                                            [ Background Persist ]
-                                            (ctx.waitUntil Layer)
-Strict Content Security Policy (CSP): Hardened headers prevent script injection without restricting necessary edge-delivered styles.Sitemap Protection: Enforces rigid regex ^/sitemap(?:-(\d+))?\.xml$ rejecting malformed crawler probes.Non-blocking Cache Writes: Background execution via ctx.waitUntil(storeInCache(...)) ensures serialization overhead never impedes client roundtrips.Payload Minimization: Ambiguous case lookups matching multiple courts defer fetching voluminous Master_Text fields until the client explicitly requests a specific Master_ID.🚢 Deployment1. Provision Production D1 DatabaseBashnpx wrangler d1 create ahkam-prod
-Copy the returned database_id into your wrangler.toml.2. Apply Migrations to Remote EdgeBashnpx wrangler d1 migrations apply DB --remote
-3. Deploy to Cloudflare WorkersBashnpx wrangler deploy
-📄 LicenseThis repository and its source code are licensed under the MIT License.
+```
+
+### Other public routes
+
+| Route | Purpose |
+| --- | --- |
+| `/` | Search interface |
+| `/judgment/:id` | Server-rendered judgment page |
+| `/robots.txt` | Crawler directives |
+| `/sitemap.xml` | Sitemap or sitemap index |
+| `/sitemap-:page.xml` | A 5,000-record sitemap page |
+| `/favicon.ico`, `/favicon.svg` | Worker-served application icon |
+
+## Security and caching
+
+- Only `GET`, `HEAD`, and `OPTIONS` are accepted; other methods receive `405 Method Not Allowed`.
+- Search, case, and ID parameters are validated before querying D1. Arabic-Indic and Persian digits are normalized for numeric parameters.
+- CORS is restricted to the origins listed in `ALLOWED_ORIGINS`; cache keys include an approved origin only when necessary.
+- API cache keys retain only documented query parameters. Query strings on judgment pages and sitemap routes are discarded, preventing cache-key fragmentation.
+- The Worker sends CSP, HSTS, frame, referrer, permissions, and content-type protection headers.
+- Search results are cached for 30 minutes; judgment JSON for 2 hours; HTML judgment pages, sitemaps, and `robots.txt` for 24 hours. Cache writes use `ctx.waitUntil()` when available.
+
+## Deployment
+
+1. Create or select a Cloudflare D1 database containing the required base schema and data.
+2. Set its `database_name` and `database_id` under the `DB` binding in `wrangler.toml`.
+3. Apply the index migrations:
+
+   ```bash
+   npx wrangler d1 migrations apply DB --remote
+   ```
+
+4. Deploy the Worker:
+
+   ```bash
+   npx wrangler deploy
+   ```
+
+If you use a custom domain, configure it through the `routes` entry in `wrangler.toml` and Cloudflare DNS.
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).
