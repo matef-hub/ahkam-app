@@ -118,3 +118,120 @@ flowchart TD
 
     SearchH -->|Async Save| BGWorker[ctx.waitUntil Cache Store]
     SSRH -->|Async Save| BGWorker
+    🗄️ Database & SchemaThe underlying storage utilizes Cloudflare D1 structured with strict constraints and an auxiliary FTS5 virtual table:1. Master Records (judgments_master)SQLCREATE TABLE judgments_master (
+  Master_ID    INTEGER PRIMARY KEY AUTOINCREMENT,
+  Court_ID     INTEGER NOT NULL,
+  Case_Number  INTEGER NOT NULL,
+  Case_Year    INTEGER NOT NULL,
+  Case_Date    TEXT,
+  Master_Text  TEXT
+);
+CREATE INDEX idx_master_case_year_court ON judgments_master (Case_Number, Case_Year, Court_ID);
+2. Legal Principles / Excerpts (principles)SQLCREATE TABLE principles (
+  Fakra_ID     INTEGER PRIMARY KEY AUTOINCREMENT,
+  Master_ID    INTEGER NOT NULL REFERENCES judgments_master(Master_ID),
+  Fakra_No     INTEGER NOT NULL,
+  Fakra_Text   TEXT NOT NULL
+);
+CREATE INDEX idx_links_fakra_mogz ON principles (Master_ID, Fakra_No);
+3. FTS5 Virtual Table (principles_fts)SQLCREATE VIRTUAL TABLE principles_fts USING fts5(
+  Fakra_Text,
+  content='principles',
+  content_rowid='Fakra_ID',
+  tokenize='unicode61'
+);
+📁 Repository Structure.
+├── 📂 migrations/
+│   ├── 0001_indexes.sql             # Baseline schema and composite lookups
+│   ├── 0002_search_indexes.sql      # FTS5 virtual tables and sync triggers
+│   └── 0003_drop_dupes.sql          # Performance cleanup: drops redundant duplicate indexes
+├── 📂 src/
+│   ├── 📄 index.js                  # Worker entry point, HEAD support, security & cache router
+│   ├── 📂 lib/
+│   │   ├── 📄 arabic.js             # Morphological stemmer, clitic stripper, FTS5 builder & snippets
+│   │   ├── 📄 cache.js              # Origin-hardened Cache API wrapper with waitUntil support
+│   │   ├── 📄 db.js                 # D1 query execution, multi-court resolvers, and bounded scans
+│   │   └── 📄 security.js           # Digit normalizer, int parser, CSP, and CORS validation
+│   ├── 📂 routes/
+│   │   ├── 📄 api.js                # RESTful API handlers (/api/search, /api/judgment)
+│   │   └── 📄 seo.js                # Deterministic sitemap pagination and robots.txt generator
+│   └── 📂 ui/
+│       └── 📄 templates.js          # SSR layout, Accessible buttons, Toast alerts & Client App Shell
+├── 📄 PATCH_NOTES.md                # Detailed audit log of bug resolutions and patches
+├── 📄 wrangler.toml                 # Cloudflare Worker deployment configuration
+└── 📄 README.md                     # Comprehensive project documentation
+🚀 Quick StartPrerequisitesNode.js v18.0.0 or higherCloudflare Wrangler CLI1. InstallationBash# Clone the repository
+git clone [https://github.com/your-username/ahkam-app.git](https://github.com/your-username/ahkam-app.git)
+cd ahkam-app
+
+# Install project dependencies
+npm install
+2. Local Database InitializationBash# Apply schema migrations to local D1 instance
+npx wrangler d1 migrations apply DB --local
+3. Start Local Edge EnvironmentBash# Launch development worker
+npx wrangler dev
+Navigate to http://localhost:8787 in your browser.🔌 API Specification🔎 Search PrinciplesHTTPGET /api/search?q={query}&courtId={courtId}&page={page}&pageSize={pageSize}
+Query ParametersParameterTypeRequiredDefaultDescriptionqstringYes—Search keywords (e.g., مسئولية, تعويض)courtIdstringNonullTarget court: 1, state_council, or 3,31pagenumberNo1Pagination page indexpageSizenumberNo20Items per page (Max limit: 50)Sample Response (200 OK)JSON{
+  "total": 1,
+  "page": 1,
+  "pageSize": 20,
+  "results": [
+    {
+      "masterId": 1042,
+      "courtId": 1,
+      "caseNumber": 125,
+      "caseYear": 85,
+      "caseDate": "2018-05-12",
+      "fakraId": 4120,
+      "snippet": "... المقرر في قضاء هذه المحكمة أن <mark>الإعلان</mark> بصحيفة الدعوى هو الأساس الذي يبنى عليه ..."
+    }
+  ]
+}
+📄 Retrieve Judgment DetailsHTTPGET /api/judgment?id={masterId}
+GET /api/judgment?caseNumber={num}&caseYear={year}&courtId={courtId}
+Sample Response (200 OK)JSON{
+  "found": true,
+  "judgment": {
+    "Master_ID": 1042,
+    "Court_ID": 1,
+    "Case_Number": 125,
+    "Case_Year": 85,
+    "Case_Date": "2018-05-12",
+    "Master_Text": "حكمت المحكمة بقبول الطعن شكلاً وفي الموضوع...",
+    "principles": [
+      {
+        "Fakra_ID": 4120,
+        "Fakra_No": 1,
+        "Fakra_Text": "المقرر في قضاء هذه المحكمة أن الإعلان بصحيفة الدعوى..."
+      }
+    ]
+  }
+}
+Sample Not Found (404 Not Found)JSON{
+  "found": false,
+  "error": "الحكم غير موجود"
+}
+🛡️ Security & Performance                                  [ Incoming Request ]
+                                           │
+                                ┌──────────┴──────────┐
+                                ▼                     ▼
+                       [ Origin Whitelisted ]  [ Origin Unknown ]
+                                │                     │
+                        Append to Cache Key     Drop from Cache
+                                │                     │
+                                └──────────┬──────────┘
+                                           │
+                                           ▼
+                                 [ Match Cached Item ]
+                                ┌──────────┴──────────┐
+                                ▼                     ▼
+                             (Hit)                 (Miss)
+                        Return Instantly     Run Bounded FTS Query
+                                                      │
+                                                      ▼
+                                            [ Background Persist ]
+                                            (ctx.waitUntil Layer)
+Strict Content Security Policy (CSP): Hardened headers prevent script injection without restricting necessary edge-delivered styles.Sitemap Protection: Enforces rigid regex ^/sitemap(?:-(\d+))?\.xml$ rejecting malformed crawler probes.Non-blocking Cache Writes: Background execution via ctx.waitUntil(storeInCache(...)) ensures serialization overhead never impedes client roundtrips.Payload Minimization: Ambiguous case lookups matching multiple courts defer fetching voluminous Master_Text fields until the client explicitly requests a specific Master_ID.🚢 Deployment1. Provision Production D1 DatabaseBashnpx wrangler d1 create ahkam-prod
+Copy the returned database_id into your wrangler.toml.2. Apply Migrations to Remote EdgeBashnpx wrangler d1 migrations apply DB --remote
+3. Deploy to Cloudflare WorkersBashnpx wrangler deploy
+📄 LicenseThis repository and its source code are licensed under the MIT License.
