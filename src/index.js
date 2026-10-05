@@ -81,6 +81,9 @@ export default {
     if (url.pathname === "/api/court-judgments") {
       return finish(await handleApiCourtJudgments(request, env, url, ctx));
     }
+    if (url.pathname === "/saved" || url.pathname === "/bookmarks") {
+      return finish(Response.redirect(new URL("/?tab=saved", request.url).href, 302));
+    }
 
     const judgmentMatch = url.pathname.match(/^\/judgment\/(\d+)$/);
     if (judgmentMatch) {
