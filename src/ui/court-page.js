@@ -2,7 +2,7 @@ import { escapeHtml, safeJsonForHtml } from "../lib/arabic.js";
 import { SHARED_STYLES } from "./styles.js";
 import { renderTopDevBar, renderHeader, renderSiteFooter, FONT_LINKS } from "./components.js";
 
-export function renderCourtLandingPageHtml(courtData) {
+export function renderCourtLandingPageHtml(courtData, user = null) {
   const title = escapeHtml(`${courtData.name} | موسوعة الأحكام القضائية المصرية`);
   const description = escapeHtml(courtData.description);
   const canonical = `https://ahkam.app/courts/${courtData.slug}`;
@@ -161,7 +161,7 @@ ${FONT_LINKS}
 ${renderTopDevBar()}
 
 <div class="container">
-  ${renderHeader({ badgeId: "courtSavedBadge", isHome: false, showSaved: true })}
+  ${renderHeader({ badgeId: "courtSavedBadge", isHome: false, showSaved: true, user })}
 
   <nav class="back-btn-row" style="margin-bottom: 16px;">
     <a href="/" class="back-btn">

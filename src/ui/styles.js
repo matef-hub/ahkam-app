@@ -225,6 +225,56 @@ body {
   box-shadow: 0 0 0 3px rgba(21, 128, 61, 0.2);
 }
 
+.header-user-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: white;
+  border: 1.5px solid var(--gold-border);
+  padding: 4px 12px;
+  border-radius: 999px;
+  box-shadow: var(--shadow-sm);
+}
+
+.user-avatar-img {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid var(--gold);
+}
+
+.user-avatar-fallback {
+  font-size: 1rem;
+}
+
+.user-profile-name {
+  font-size: 0.84rem;
+  font-weight: 800;
+  color: var(--primary);
+  max-width: 140px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.user-logout-link {
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: #dc2626;
+  text-decoration: none;
+  background: #fee2e2;
+  padding: 3px 8px;
+  border-radius: 6px;
+  transition: all 0.2s;
+  margin-right: 4px;
+}
+
+.user-logout-link:hover {
+  background: #fca5a5;
+  color: #991b1b;
+}
+
 /* ==========================================================================
    Hero Judicial Plaques (Stats Bar)
    ========================================================================== */

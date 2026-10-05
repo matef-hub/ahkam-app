@@ -2,7 +2,7 @@ import { escapeHtml, safeJsonForHtml } from "../lib/arabic.js";
 import { SHARED_STYLES } from "./styles.js";
 import { renderTopDevBar, renderHeader, renderSiteFooter, toIsoDate, FONT_LINKS } from "./components.js";
 
-export function renderJudgmentPageHtml(data) {
+export function renderJudgmentPageHtml(data, user = null) {
   const master = data.master;
   const courtName = master.Court_Name || "المحكمة غير محددة";
   const titleRaw = `حكم ${courtName} - الطعن رقم ${master.Case_No} لسنة ${master.Case_Year} قضائية | موسوعة الأحكام القضائية المصرية`;
@@ -60,7 +60,7 @@ ${FONT_LINKS}
 ${renderTopDevBar()}
 
 <div class="container">
-  ${renderHeader({ badgeId: "detailSavedBadge", isHome: false, showSaved: true })}
+  ${renderHeader({ badgeId: "detailSavedBadge", isHome: false, showSaved: true, user })}
 
   <main>
     <a href="/" class="back-btn">
@@ -228,14 +228,16 @@ function toggleSaveFullJudgment() {
       btn.style.fontWeight = "";
     }
     showToast("تم إزالة الحكم من المفضلة");
+    fetch("/api/user/saved?id=" + idNum, { method: "DELETE" }).catch(() => {});
   } else {
-    saved.unshift({
+    const item = {
       masterId: idNum,
       courtName: m.Court_Name || "محكمة النقض",
       caseNo: String(m.Case_No || ""),
       caseYear: String(m.Case_Year || ""),
       caseDate: m.Case_Date || ""
-    });
+    };
+    saved.unshift(item);
     if (btn) {
       btn.textContent = "⭐ محفوظ في المفضلة";
       btn.style.color = "#b45309";
@@ -244,6 +246,11 @@ function toggleSaveFullJudgment() {
       btn.style.fontWeight = "700";
     }
     showToast("تم حفظ الحكم في المفضلة ⭐");
+    fetch("/api/user/saved", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(item),
+    }).catch(() => {});
   }
   localStorage.setItem("ahkam_saved_judgments", JSON.stringify(saved));
   updateDetailSavedBadge();

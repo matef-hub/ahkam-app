@@ -12,6 +12,7 @@ export { SHARED_STYLES } from "./styles.js";
 export { renderHomePageHtml } from "./home-page.js";
 export { renderJudgmentPageHtml } from "./judgment-page.js";
 export { renderCourtLandingPageHtml } from "./court-page.js";
+export { renderLoginPageHtml } from "./login-page.js";
 export {
   renderTopDevBar,
   renderHeader,

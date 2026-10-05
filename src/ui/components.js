@@ -18,7 +18,7 @@ export function renderTopDevBar() {
 </div>`;
 }
 
-export function renderHeader({ badgeId = "headerSavedBadge", isHome = false, showSaved = true } = {}) {
+export function renderHeader({ badgeId = "headerSavedBadge", isHome = false, showSaved = true, user = null } = {}) {
   const brandTitleTag = isHome ? "h1" : "div";
   return `
   <header class="header">
@@ -41,11 +41,17 @@ export function renderHeader({ badgeId = "headerSavedBadge", isHome = false, sho
         <span>⭐ الأحكام المحفوظة</span>
         <span class="saved-count-pill" id="${badgeId}">0</span>
       </a>`) : ""}
-      ${isHome ? `
+      
+      ${user ? `
+      <div class="header-user-pill">
+        ${user.pictureUrl ? `<img src="${escapeHtml(user.pictureUrl)}" alt="${escapeHtml(user.name)}" class="user-avatar-img" width="26" height="26">` : `<span class="user-avatar-fallback">👤</span>`}
+        <span class="user-profile-name">${escapeHtml(user.name)}</span>
+        <a href="/auth/logout" class="user-logout-link" title="تسجيل الخروج">خروج 🚪</a>
+      </div>` : (isHome ? `
       <div class="header-status" role="status">
         <span class="status-dot"></span>
         <span>المكنز متاح للبحث الفوري</span>
-      </div>` : ""}
+      </div>` : "")}
     </div>
   </header>`;
 }

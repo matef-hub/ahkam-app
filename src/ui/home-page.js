@@ -2,7 +2,7 @@ import { escapeHtml, safeJsonForHtml } from "../lib/arabic.js";
 import { SHARED_STYLES } from "./styles.js";
 import { renderTopDevBar, renderHeader, renderSiteFooter, FONT_LINKS } from "./components.js";
 
-export function renderHomePageHtml(stats = null) {
+export function renderHomePageHtml(stats = null, user = null) {
   return `<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -45,7 +45,7 @@ ${FONT_LINKS}
 ${renderTopDevBar()}
 
 <div class="container">
-  ${renderHeader({ badgeId: "headerSavedBadge", isHome: true, showSaved: true })}
+  ${renderHeader({ badgeId: "headerSavedBadge", isHome: true, showSaved: true, user })}
 
   ${stats ? `
   <div style="margin: 0 0 18px;">
@@ -835,15 +835,22 @@ function toggleSaveFromCard(event, masterId, courtName, caseNo, caseYear, caseDa
   if (idx >= 0) {
     list.splice(idx, 1);
     showToast("تم إزالة الحكم من المفضلة");
+    fetch("/api/user/saved?id=" + idNum, { method: "DELETE" }).catch(() => {});
   } else {
-    list.unshift({
+    const item = {
       masterId: idNum,
       courtName: courtName || "محكمة النقض",
       caseNo: caseNo != null ? String(caseNo) : "",
       caseYear: caseYear != null ? String(caseYear) : "",
       caseDate: caseDate ? String(caseDate) : ""
-    });
+    };
+    list.unshift(item);
     showToast("تم حفظ الحكم في المفضلة ⭐");
+    fetch("/api/user/saved", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(item),
+    }).catch(() => {});
   }
   localStorage.setItem("ahkam_saved_judgments", JSON.stringify(list));
   updateSavedBadge();
@@ -860,6 +867,32 @@ function removeSavedJudgment(masterId) {
   updateSaveButtons();
   if (currentMode === "saved") renderSavedJudgments();
   showToast("تم إزالة الحكم من المفضلة");
+  fetch("/api/user/saved?id=" + idNum, { method: "DELETE" }).catch(() => {});
+}
+
+async function syncSavedJudgmentsWithCloud() {
+  try {
+    const localList = getSavedJudgments();
+    if (localList.length > 0) {
+      await fetch("/api/user/saved/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items: localList }),
+      });
+    }
+    const res = await fetch("/api/user/saved");
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data.saved)) {
+        localStorage.setItem("ahkam_saved_judgments", JSON.stringify(data.saved));
+        updateSavedBadge();
+        updateSaveButtons();
+        if (currentMode === "saved") renderSavedJudgments();
+      }
+    }
+  } catch (err) {
+    console.warn("Cloud sync saved judgments notice:", err);
+  }
 }
 
 function updateSaveButtons() {
@@ -1249,6 +1282,7 @@ window.addEventListener("popstate", (e) => {
 document.addEventListener("DOMContentLoaded", () => {
   loadCourtOptions();
   updateSavedBadge();
+  syncSavedJudgmentsWithCloud();
   const params = new URLSearchParams(window.location.search);
   if (params.get("tab") === "saved" || window.location.hash === "#saved") {
     setMode("saved");

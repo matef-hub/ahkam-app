@@ -103,6 +103,7 @@ export function initDatabase() {
     "0003_drop_duplicate_indexes.sql",
     "0004_normalized_judgment_fts.sql",
     "0005_search_metadata_and_integrity.sql",
+    "0006_user_auth_and_saved.sql",
   ];
 
   for (const file of migrationFiles) {
