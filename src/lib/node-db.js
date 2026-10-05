@@ -104,6 +104,7 @@ export function initDatabase() {
     "0004_normalized_judgment_fts.sql",
     "0005_search_metadata_and_integrity.sql",
     "0006_user_auth_and_saved.sql",
+    "0007_trial_limit.sql",
   ];
 
   for (const file of migrationFiles) {

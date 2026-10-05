@@ -275,6 +275,70 @@ body {
   color: #991b1b;
 }
 
+.trial-banner {
+  background: linear-gradient(135deg, #fef3c7 0%, #fffbeb 100%);
+  border: 1.5px solid #fde68a;
+  border-right: 5px solid #b45309;
+  border-radius: var(--radius-md);
+  padding: 12px 18px;
+  margin-bottom: 20px;
+  font-size: 0.9rem;
+  color: #92400e;
+  box-shadow: 0 4px 12px rgba(180, 83, 9, 0.08);
+}
+
+.trial-auth-btn {
+  background: #b45309;
+  color: #ffffff;
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: 0.84rem;
+  font-weight: 800;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.trial-auth-btn:hover {
+  background: #92400e;
+  color: #ffffff;
+}
+
+.trial-lock-notice {
+  background: #fff1f2;
+  border: 1.5px solid #fecdd3;
+  border-right: 5px solid #e11d48;
+  border-radius: var(--radius-md);
+  padding: 16px 20px;
+  margin-bottom: 20px;
+  color: #9f1239;
+  font-size: 0.96rem;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.trial-login-link {
+  background: #e11d48;
+  color: #ffffff;
+  padding: 8px 18px;
+  border-radius: 8px;
+  text-decoration: none;
+  font-size: 0.9rem;
+  font-weight: 800;
+  transition: background 0.2s;
+}
+
+.trial-login-link:hover {
+  background: #be123c;
+}
+
 /* ==========================================================================
    Hero Judicial Plaques (Stats Bar)
    ========================================================================== */

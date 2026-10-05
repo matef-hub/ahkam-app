@@ -64,20 +64,36 @@ export async function handleGoogleLogin(request, env, url) {
   return redirectResponse(authUrl, [createOAuthStateCookie(stateStr)]);
 }
 
-export async function handleDevLogin(request, env, url) {
+export async function handleTrialLogin(request, env, url) {
   const returnTo = url.searchParams.get("return_to") || "/";
-  // Demo user for local development and review
-  const demoGoogleUser = {
-    googleId: "dev-user-master-id-1",
-    email: "atefdodo@gmail.com",
-    name: "أ / محمد عاطف محمد",
+  const cookies = parseCookies(request);
+
+  if (cookies["ahkam_trial_used"] === "1") {
+    return redirectResponse(
+      `/login?error=${encodeURIComponent("عذراً، لقد استنفدت التجربة الفورية المتاحة (بحث واحد فقط). تفضل بتسجيل الدخول بحساب Google للاستمرار.")}&return_to=${encodeURIComponent(returnTo)}`
+    );
+  }
+
+  const guestRand = Math.random().toString(36).slice(2, 8);
+  const guestUser = {
+    googleId: "guest-trial-" + guestRand,
+    email: "guest-" + guestRand + "@ahkam.app",
+    name: "زائر (تجربة بحث واحدة)",
     pictureUrl: "",
   };
 
-  const user = await upsertGoogleUser(env.DB, demoGoogleUser);
-  const session = await createSession(env.DB, user.id, request);
+  const user = await upsertGoogleUser(env.DB, guestUser);
+  const session = await createSession(env.DB, user.id, request, { isTrial: true });
 
-  return redirectResponse(returnTo, [createSessionCookie(session.token)]);
+  const trialCookie = "ahkam_trial_used=1; Path=/; Max-Age=86400; SameSite=Lax";
+  return redirectResponse(returnTo, [
+    createSessionCookie(session.token, 7200),
+    trialCookie,
+  ]);
+}
+
+export async function handleDevLogin(request, env, url) {
+  return handleTrialLogin(request, env, url);
 }
 
 export async function handleGoogleCallback(request, env, url) {

@@ -2,7 +2,8 @@ import { escapeHtml, safeJsonForHtml } from "../lib/arabic.js";
 import { SHARED_STYLES } from "./styles.js";
 import { renderTopDevBar, renderHeader, renderSiteFooter, FONT_LINKS } from "./components.js";
 
-export function renderHomePageHtml(stats = null, user = null) {
+export function renderHomePageHtml(stats = null, user = null, session = null) {
+  const isTrial = Boolean(session && session.isTrial);
   return `<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -46,6 +47,17 @@ ${renderTopDevBar()}
 
 <div class="container">
   ${renderHeader({ badgeId: "headerSavedBadge", isHome: true, showSaved: true, user })}
+
+  ${isTrial ? `
+  <div class="trial-banner" id="trialNoticeBanner">
+    <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">
+      <div>
+        <strong>⚡ تجربة فورية:</strong>
+        <span id="trialNoticeText">متبقي لك بحث استكشافي واحد فقط. بعد إجرائه، سيُطلب منك تسجيل الدخول بحساب Google للاستمرار.</span>
+      </div>
+      <a href="/login" class="trial-auth-btn">تسجيل الدخول الكامل بحساب Google 👈</a>
+    </div>
+  </div>` : ""}
 
   ${stats ? `
   <div style="margin: 0 0 18px;">
@@ -250,6 +262,8 @@ ${renderTopDevBar()}
 ${renderSiteFooter()}
 
 <script>
+const isTrialUser = ${Boolean(session && session.isTrial)};
+let trialSearchCount = ${Number(session && session.searchCount || 0)};
 let currentMode = "text";
 let activeController = null;
 let activeRequestId = 0;
@@ -448,6 +462,18 @@ async function executeTextSearch(page = 1, { pushHistory = true, cursor = undefi
     return;
   }
 
+  if (isTrialUser && trialSearchCount >= 1) {
+    showToast("لقد استنفدت التجربة الفورية المتاحة (بحث واحد فقط)");
+    document.getElementById("results").innerHTML = \`
+      <div class="trial-lock-notice">
+        <span>🔒 لقد استنفدت التجربة الفورية المتاحة (بحث واحد فقط). تفضل بتسجيل الدخول بحساب Google للاستمرار في البحث غير المحدود وحفظ الأحكام.</span>
+        <a href="/login" class="trial-login-link">تسجيل الدخول بحساب Google 👈</a>
+      </div>
+    \`;
+    window.scrollTo({ top: document.querySelector(".search-card").offsetTop - 20, behavior: "smooth" });
+    return;
+  }
+
   const { signal, reqId } = beginRequest();
 
   setLoading(true);
@@ -484,7 +510,34 @@ async function executeTextSearch(page = 1, { pushHistory = true, cursor = undefi
     setLoading(false);
 
     if (!res.ok) {
+      if (res.status === 403 || data.error === "trial_expired") {
+        document.getElementById("results").innerHTML = \`
+          <div class="trial-lock-notice">
+            <span>🔒 \${escapeHtml(data.message || "لقد استنفدت التجربة الفورية المتاحة (بحث واحد فقط).")}</span>
+            <a href="/login" class="trial-login-link">تسجيل الدخول بحساب Google 👈</a>
+          </div>
+        \`;
+        document.getElementById("pagination").style.display = "none";
+        hideStats();
+        return;
+      }
       return showMessage(data.error || "تعذر إتمام البحث القضائي.");
+    }
+
+    if (isTrialUser) {
+      trialSearchCount++;
+      const noticeEl = document.getElementById("trialNoticeBanner");
+      if (noticeEl) {
+        noticeEl.innerHTML = \`
+          <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">
+            <div>
+              <strong>🔒 اكتمل بحثك التجريبي المجاني الوحيد:</strong>
+              <span>لإجراء أي بحث جديد أو حفظ الأحكام، تفضل بتسجيل الدخول بحسابك.</span>
+            </div>
+            <a href="/login" class="trial-auth-btn">تسجيل الدخول بحساب Google 👈</a>
+          </div>
+        \`;
+      }
     }
 
     searchCursors.set(stateKey + "\\u001f" + page, effectiveCursor || null);
@@ -528,7 +581,17 @@ function renderSearchResults(data, sort = selectedSearchOptions().sort) {
 
   showStats(data.total_judgments, data.total_matches, sortLabel(sort));
 
-  let html = \`
+  let html = "";
+  if (isTrialUser) {
+    html += \`
+      <div class="trial-lock-notice">
+        <span>🔒 لقد استنفدت بحثك التجريبي المجاني (بحث واحد فقط). لمتابعة البحث والاطلاع على حيثيات الأحكام كاملة، تفضل بتسجيل الدخول.</span>
+        <a href="/login" class="trial-login-link">تسجيل الدخول بحساب Google 👈</a>
+      </div>
+    \`;
+  }
+
+  html += \`
     <div class="results-header-info">
       <h2>الأحكام القضائية المستخلصة (صفحة \${data.page} من \${Math.max(1, Math.ceil(data.total_judgments / data.page_size))})</h2>
       <span style="font-weight:700; color:var(--text-muted); font-size:0.88rem;">
@@ -767,11 +830,16 @@ function copySearchResultLink(masterId) {
 
 function copyCitation(masterId, courtName, caseNo, caseYear, caseDate) {
   const cDate = caseDate ? " - جلسة " + caseDate : "";
-  const citation = (courtName || "محكمة النقض") + " - الطعن رقم " + (caseNo || "") + " لسنة " + (caseYear || "") + " قضائية" + cDate + " (المكنز القضائي: " + window.location.origin + "/judgment/" + masterId + ")";
+  const citation = (courtName || "محكمة النقض") + " - الطعن رقم " + (caseNo || "") + " لسنة " + (caseYear || "") + " قضائية" + cDate + " (موسوعة الأحكام القضائية: " + window.location.origin + "/judgment/" + masterId + ")";
   copyToClipboard(citation, "تم نسخ السند القانوني والاستشهاد");
 }
 
 function quickSearch(topic) {
+  if (isTrialUser && trialSearchCount >= 1) {
+    showToast("لقد استنفدت التجربة الفورية المتاحة (بحث واحد فقط)");
+    window.location.href = "/login";
+    return;
+  }
   const q = document.getElementById("query");
   if (!q) return;
   setMode("text");

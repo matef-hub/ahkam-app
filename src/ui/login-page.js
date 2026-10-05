@@ -5,7 +5,7 @@ import { renderTopDevBar, renderSiteFooter, FONT_LINKS } from "./components.js";
 export function renderLoginPageHtml({ returnTo = "/", error = "", isDev = false } = {}) {
   const safeReturn = escapeHtml(returnTo || "/");
   const loginUrl = `/auth/google/login?return_to=${encodeURIComponent(returnTo || "/")}`;
-  const devLoginUrl = `/auth/dev/login?return_to=${encodeURIComponent(returnTo || "/")}`;
+  const trialLoginUrl = `/auth/trial/login?return_to=${encodeURIComponent(returnTo || "/")}`;
 
   return `<!DOCTYPE html>
 <html lang="ar" dir="rtl">
@@ -13,7 +13,7 @@ export function renderLoginPageHtml({ returnTo = "/", error = "", isDev = false 
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>تسجيل الدخول | موسوعة الأحكام القضائية المصرية</title>
-<meta name="description" content="تسجيل الدخول السريع بحساب Google للوصول إلى مكنز الأحكام القضائية المصرية ومزامنة أبحاثك القانونية.">
+<meta name="description" content="تسجيل الدخول السريع بحساب Google للاطلاع على سوابق وقرارات محاكم النقض والدستورية العليا ومجلس الدولة، ومزامنة مفضلتك القانونية سحابياً.">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="alternate icon" href="/favicon.ico">
 ${FONT_LINKS}
@@ -188,12 +188,12 @@ ${renderTopDevBar()}
     </div>
 
     <h1 class="auth-title">موسوعة الأحكام القضائية المصرية</h1>
-    <div class="auth-subtitle">المكنز القضائي الموحد • وصول حصري للأعضاء</div>
+    <div class="auth-subtitle">سوابق وقرارات محاكم النقض والدستورية ومجلس الدولة • وصول حصري للأعضاء</div>
 
     ${error ? `<div class="auth-error-banner">⚠️ ${escapeHtml(error)}</div>` : ""}
 
     <p class="auth-desc">
-      للوصول إلى مكنز أحكام محكمة النقض والدستورية العليا ومجلس الدولة، وحفظ ومزامنة استشهاداتك القضائية سحابياً، يُرجى تسجيل الدخول المباشر بحسابك.
+      للاطلاع على سوابق وقرارات محاكم النقض والدستورية العليا ومجلس الدولة، ومزامنة مفضلتك القانونية سحابياً، تفضل بتسجيل الدخول إلى حسابك.
     </p>
 
     <a href="${loginUrl}" class="google-btn" title="تسجيل الدخول الفوري بحساب Google">
@@ -207,8 +207,8 @@ ${renderTopDevBar()}
     </a>
 
     <div class="dev-bypass-box">
-      <a href="${devLoginUrl}" class="dev-bypass-btn" title="دخول تجريبي فوري للمطورين">
-        <span>⚡ دخول فوري تجريبي (للتجربة والتحقق)</span>
+      <a href="${trialLoginUrl}" class="dev-bypass-btn" title="تجربة بحث واحدة فقط دون تسجيل">
+        <span>⚡ تجربة بحث واحدة فورية (بحث واحد فقط دون تسجيل)</span>
       </a>
     </div>
 

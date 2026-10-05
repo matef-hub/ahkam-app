@@ -9,7 +9,7 @@ export function renderTopDevBar() {
   return `
 <div class="top-dev-bar">
   <div class="container top-dev-content">
-    <span>⚖️ قاعدة البيانات والمكنز القضائي الموحد</span>
+    <span>⚖️ موسوعة السوابق والأحكام القضائية المصرية</span>
     <span class="dev-divider">|</span>
     <span>إشراف وتطوير:</span>
     <span class="dev-name">أ / محمد عاطف محمد</span>
@@ -50,7 +50,7 @@ export function renderHeader({ badgeId = "headerSavedBadge", isHome = false, sho
       </div>` : (isHome ? `
       <div class="header-status" role="status">
         <span class="status-dot"></span>
-        <span>المكنز متاح للبحث الفوري</span>
+        <span>قاعدة السوابق القضائية متاحة للبحث</span>
       </div>` : "")}
     </div>
   </header>`;

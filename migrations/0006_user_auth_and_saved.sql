@@ -22,7 +22,9 @@ CREATE TABLE IF NOT EXISTS sessions (
   ip_address TEXT,
   user_agent TEXT,
   created_at TEXT NOT NULL,
-  expires_at TEXT NOT NULL
+  expires_at TEXT NOT NULL,
+  search_count INTEGER DEFAULT 0,
+  is_trial INTEGER DEFAULT 0
 );
 
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);

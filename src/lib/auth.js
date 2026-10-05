@@ -46,24 +46,25 @@ export function clearOAuthStateCookie() {
   return `${OAUTH_STATE_COOKIE_NAME}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT`;
 }
 
-export async function createSession(db, userId, request) {
+export async function createSession(db, userId, request, { isTrial = false } = {}) {
   const token = (crypto.randomUUID ? crypto.randomUUID().replace(/-/g, "") : Math.random().toString(36).slice(2)) +
                 (crypto.randomUUID ? crypto.randomUUID().replace(/-/g, "") : Math.random().toString(36).slice(2));
   const tokenHash = await hashToken(token);
   const now = new Date();
   const createdAt = now.toISOString();
-  const expiresAt = new Date(now.getTime() + SESSION_MAX_AGE_SECONDS * 1000).toISOString();
+  const maxAge = isTrial ? 2 * 3600 : SESSION_MAX_AGE_SECONDS;
+  const expiresAt = new Date(now.getTime() + maxAge * 1000).toISOString();
   const ip = request.headers.get("CF-Connecting-IP") || request.headers.get("x-forwarded-for") || "";
   const userAgent = request.headers.get("User-Agent") || "";
 
   await db
     .prepare(
-      "INSERT INTO sessions (token_hash, user_id, ip_address, user_agent, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)"
+      "INSERT INTO sessions (token_hash, user_id, ip_address, user_agent, created_at, expires_at, search_count, is_trial) VALUES (?, ?, ?, ?, ?, ?, 0, ?)"
     )
-    .bind(tokenHash, userId, ip, userAgent, createdAt, expiresAt)
+    .bind(tokenHash, userId, ip, userAgent, createdAt, expiresAt, isTrial ? 1 : 0)
     .run();
 
-  return { token, tokenHash, expiresAt };
+  return { token, tokenHash, expiresAt, isTrial: Boolean(isTrial) };
 }
 
 export async function validateSession(db, request) {
@@ -76,7 +77,7 @@ export async function validateSession(db, request) {
 
   const session = await db
     .prepare(
-      `SELECT s.token_hash, s.user_id, s.expires_at,
+      `SELECT s.token_hash, s.user_id, s.expires_at, s.search_count, s.is_trial,
               u.id, u.google_id, u.email, u.name, u.picture_url,
               u.subscription_status, u.subscription_tier, u.subscription_expires_at
        FROM sessions s
@@ -93,6 +94,8 @@ export async function validateSession(db, request) {
       tokenHash: session.token_hash,
       userId: session.user_id,
       expiresAt: session.expires_at,
+      searchCount: Number(session.search_count || 0),
+      isTrial: Boolean(session.is_trial),
     },
     user: {
       id: session.id,
@@ -105,6 +108,13 @@ export async function validateSession(db, request) {
       subscriptionExpiresAt: session.subscription_expires_at,
     },
   };
+}
+
+export async function incrementSessionSearchCount(db, tokenHash) {
+  await db
+    .prepare("UPDATE sessions SET search_count = search_count + 1 WHERE token_hash = ?")
+    .bind(tokenHash)
+    .run();
 }
 
 export async function destroySession(db, request) {

@@ -159,3 +159,31 @@ test("Authenticated user can access / and see personalized header with their nam
   assert.ok(html.includes("المستشار أحمد فؤاد"), "Personalized user name appears in header");
   assert.ok(html.includes("خروج 🚪"), "Logout link appears in header");
 });
+
+test("Trial session: Allows exactly 1 search then blocks subsequent searches with 403", async () => {
+  const trialUser = await upsertGoogleUser(db, {
+    googleId: "trial-limit-test-" + Date.now(),
+    email: "trial-" + Date.now() + "@ahkam.app",
+    name: "زائر تجريبي",
+  });
+
+  const session = await createSession(db, trialUser.id, new Request("http://localhost:3000/"), { isTrial: true });
+
+  const firstSearchReq = new Request("http://localhost:3000/api/search?q=شيك", {
+    headers: { Cookie: `${SESSION_COOKIE_NAME}=${session.token}` },
+  });
+
+  const firstRes = await worker.fetch(firstSearchReq, { DB: db });
+  assert.equal(firstRes.status, 200, "First trial search must succeed");
+
+  // Second search with same trial session must be blocked
+  const secondSearchReq = new Request("http://localhost:3000/api/search?q=بطلان", {
+    headers: { Cookie: `${SESSION_COOKIE_NAME}=${session.token}` },
+  });
+
+  const secondRes = await worker.fetch(secondSearchReq, { DB: db });
+  assert.equal(secondRes.status, 403, "Second trial search must be blocked with 403");
+  const data = await secondRes.json();
+  assert.equal(data.error, "trial_expired");
+});
+

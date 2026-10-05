@@ -4,12 +4,13 @@ import { handleRobotsTxt, handleSitemap } from "./routes/seo.js";
 import {
   handleGoogleLogin,
   handleDevLogin,
+  handleTrialLogin,
   handleGoogleCallback,
   handleLogout,
   handleUserSavedApi,
   handleUserMeApi,
 } from "./routes/auth.js";
-import { validateSession } from "./lib/auth.js";
+import { validateSession, incrementSessionSearchCount } from "./lib/auth.js";
 import {
   renderHomePageHtml,
   renderJudgmentPageHtml,
@@ -87,8 +88,8 @@ export default {
     if (url.pathname === "/auth/google/login") {
       return finish(await handleGoogleLogin(request, env, url));
     }
-    if (url.pathname === "/auth/dev/login") {
-      return finish(await handleDevLogin(request, env, url));
+    if (url.pathname === "/auth/trial/login" || url.pathname === "/auth/dev/login") {
+      return finish(await handleTrialLogin(request, env, url));
     }
     if (url.pathname === "/auth/google/callback") {
       return finish(await handleGoogleCallback(request, env, url));
@@ -164,6 +165,23 @@ export default {
 
     // Authenticated Search & Retrieval APIs
     if (url.pathname === "/api/search") {
+      if (auth.session.isTrial) {
+        if (auth.session.searchCount >= 1) {
+          return finish(new Response(JSON.stringify({
+            error: "trial_expired",
+            message: "لقد استنفدت التجربة الفورية المتاحة (بحث واحد فقط). تفضل بتسجيل الدخول بحساب Google لمواصلة البحث غير المحدود وحفظ الأحكام.",
+            login_url: `/login?return_to=${encodeURIComponent(url.pathname + url.search)}`,
+          }), {
+            status: 403,
+            headers: {
+              ...SECURITY_HEADERS,
+              "Content-Type": "application/json; charset=utf-8",
+              "Cache-Control": "no-store",
+            },
+          }));
+        }
+        await incrementSessionSearchCount(env.DB, auth.session.tokenHash);
+      }
       return finish(await handleApiSearch(request, env, url, ctx));
     }
     if (url.pathname === "/api/judgment") {
@@ -235,7 +253,7 @@ export default {
       let stats = null;
       try { stats = await getHomeStats(env.DB); }
       catch (error) { console.warn("Homepage stats unavailable", error?.message || error); }
-      const response = new Response(renderHomePageHtml(stats, auth.user), {
+      const response = new Response(renderHomePageHtml(stats, auth.user, auth.session), {
         headers: {
           ...SECURITY_HEADERS,
           "Content-Type": "text/html; charset=utf-8",
