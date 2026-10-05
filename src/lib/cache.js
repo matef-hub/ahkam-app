@@ -39,10 +39,13 @@ function canonicalValue(pathname, key, value) {
 
 const CACHEABLE_STATUSES = new Set([200, 404]);
 
+export const APP_CACHE_VERSION = "v20261005_2";
+
 export function getCacheKey(request) {
   const url = new URL(request.url);
   const allowed = CACHE_PARAM_ALLOWLIST[url.pathname];
   const sortedParams = new URLSearchParams();
+  sortedParams.set("__app_v", APP_CACHE_VERSION);
 
   // Only recognized API parameters take part in the key. Every other path
   // (judgment pages, sitemaps) ignores the query string completely so that
