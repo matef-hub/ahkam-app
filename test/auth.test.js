@@ -187,3 +187,41 @@ test("Trial session: Allows exactly 1 search then blocks subsequent searches wit
   assert.equal(data.error, "trial_expired");
 });
 
+test("Trial session: Refreshing / after 1 search redirects to /login and /login shows the page", async () => {
+  const trialUser = await upsertGoogleUser(db, {
+    googleId: "trial-refresh-test-" + Date.now(),
+    email: "trial-refresh-" + Date.now() + "@ahkam.app",
+    name: "زائر للتجربة",
+  });
+
+  const session = await createSession(db, trialUser.id, new Request("http://localhost:3000/"), { isTrial: true });
+
+  // Before search: visiting / works
+  const beforeReq = new Request("http://localhost:3000/", {
+    headers: { Cookie: `${SESSION_COOKIE_NAME}=${session.token}` },
+  });
+  const beforeRes = await worker.fetch(beforeReq, { DB: db });
+  assert.equal(beforeRes.status, 200);
+
+  // Visiting /login while in trial shows the login screen (does not bounce back)
+  const loginReq = new Request("http://localhost:3000/login", {
+    headers: { Cookie: `${SESSION_COOKIE_NAME}=${session.token}` },
+  });
+  const loginRes = await worker.fetch(loginReq, { DB: db });
+  assert.equal(loginRes.status, 200, "/login must show login screen for trial user");
+
+  // Perform 1 search
+  const searchReq = new Request("http://localhost:3000/api/search?q=عقد", {
+    headers: { Cookie: `${SESSION_COOKIE_NAME}=${session.token}` },
+  });
+  await worker.fetch(searchReq, { DB: db });
+
+  // Now, refreshing / must redirect to /login
+  const refreshReq = new Request("http://localhost:3000/", {
+    headers: { Cookie: `${SESSION_COOKIE_NAME}=${session.token}` },
+  });
+  const refreshRes = await worker.fetch(refreshReq, { DB: db });
+  assert.equal(refreshRes.status, 302, "Must redirect to /login after 1 trial search");
+  assert.ok(refreshRes.headers.get("Location").includes("/login"), "Redirect Location must point to /login");
+});
+

@@ -108,7 +108,8 @@ export default {
 
     // Direct Login Route
     if (url.pathname === "/login") {
-      if (auth) {
+      // Only redirect away if the user is a REAL authenticated user (not a temporary trial user)
+      if (auth && !auth.session.isTrial && !url.searchParams.has("force")) {
         const returnTo = url.searchParams.get("return_to") || "/";
         return finish(Response.redirect(new URL(returnTo, request.url).href, 302));
       }
@@ -153,6 +154,28 @@ export default {
           "Cache-Control": "no-cache, no-store, must-revalidate",
         },
       }));
+    }
+
+    // Exhausted Trial Enforcement: If a trial user has already used their 1 search, kick them to login
+    if (auth.session.isTrial && auth.session.searchCount >= 1) {
+      if (url.pathname.startsWith("/api/")) {
+        return finish(new Response(JSON.stringify({
+          error: "trial_expired",
+          message: "لقد استنفدت التجربة الفورية المتاحة (بحث واحد فقط). تفضل بتسجيل الدخول بحساب Google للاستمرار بدون قيود.",
+          login_url: `/login?return_to=${encodeURIComponent(url.pathname + url.search)}`,
+        }), {
+          status: 403,
+          headers: {
+            ...SECURITY_HEADERS,
+            "Content-Type": "application/json; charset=utf-8",
+            "Cache-Control": "no-store",
+          },
+        }));
+      }
+
+      // For page requests (such as refreshing / or opening another page), redirect directly to /login
+      const loginUrlWithMsg = `/login?error=${encodeURIComponent("لقد استنفدت التجربة الفورية المتاحة (بحث واحد فقط). تفضل بتسجيل الدخول بحساب Google للاستمرار.")}&return_to=${encodeURIComponent(url.pathname + url.search)}`;
+      return finish(Response.redirect(new URL(loginUrlWithMsg, request.url).href, 302));
     }
 
     // Authenticated User APIs

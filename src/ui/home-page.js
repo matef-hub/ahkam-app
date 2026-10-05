@@ -55,7 +55,7 @@ ${renderTopDevBar()}
         <strong>⚡ تجربة فورية:</strong>
         <span id="trialNoticeText">متبقي لك بحث استكشافي واحد فقط. بعد إجرائه، سيُطلب منك تسجيل الدخول بحساب Google للاستمرار.</span>
       </div>
-      <a href="/login" class="trial-auth-btn">تسجيل الدخول الكامل بحساب Google 👈</a>
+      <a href="/auth/google/login" class="trial-auth-btn">تسجيل الدخول الكامل بحساب Google 👈</a>
     </div>
   </div>` : ""}
 
@@ -467,7 +467,7 @@ async function executeTextSearch(page = 1, { pushHistory = true, cursor = undefi
     document.getElementById("results").innerHTML = \`
       <div class="trial-lock-notice">
         <span>🔒 لقد استنفدت التجربة الفورية المتاحة (بحث واحد فقط). تفضل بتسجيل الدخول بحساب Google للاستمرار في البحث غير المحدود وحفظ الأحكام.</span>
-        <a href="/login" class="trial-login-link">تسجيل الدخول بحساب Google 👈</a>
+        <a href="/auth/google/login" class="trial-login-link">تسجيل الدخول بحساب Google 👈</a>
       </div>
     \`;
     window.scrollTo({ top: document.querySelector(".search-card").offsetTop - 20, behavior: "smooth" });
@@ -514,7 +514,7 @@ async function executeTextSearch(page = 1, { pushHistory = true, cursor = undefi
         document.getElementById("results").innerHTML = \`
           <div class="trial-lock-notice">
             <span>🔒 \${escapeHtml(data.message || "لقد استنفدت التجربة الفورية المتاحة (بحث واحد فقط).")}</span>
-            <a href="/login" class="trial-login-link">تسجيل الدخول بحساب Google 👈</a>
+            <a href="/auth/google/login" class="trial-login-link">تسجيل الدخول بحساب Google 👈</a>
           </div>
         \`;
         document.getElementById("pagination").style.display = "none";
@@ -534,7 +534,7 @@ async function executeTextSearch(page = 1, { pushHistory = true, cursor = undefi
               <strong>🔒 اكتمل بحثك التجريبي المجاني الوحيد:</strong>
               <span>لإجراء أي بحث جديد أو حفظ الأحكام، تفضل بتسجيل الدخول بحسابك.</span>
             </div>
-            <a href="/login" class="trial-auth-btn">تسجيل الدخول بحساب Google 👈</a>
+            <a href="/auth/google/login" class="trial-auth-btn">تسجيل الدخول بحساب Google 👈</a>
           </div>
         \`;
       }
@@ -586,7 +586,7 @@ function renderSearchResults(data, sort = selectedSearchOptions().sort) {
     html += \`
       <div class="trial-lock-notice">
         <span>🔒 لقد استنفدت بحثك التجريبي المجاني (بحث واحد فقط). لمتابعة البحث والاطلاع على حيثيات الأحكام كاملة، تفضل بتسجيل الدخول.</span>
-        <a href="/login" class="trial-login-link">تسجيل الدخول بحساب Google 👈</a>
+        <a href="/auth/google/login" class="trial-login-link">تسجيل الدخول بحساب Google 👈</a>
       </div>
     \`;
   }

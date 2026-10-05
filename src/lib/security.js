@@ -5,12 +5,12 @@ export { MAX_SEARCH_UNITS };
 export const SECURITY_HEADERS = {
   "X-Content-Type-Options": "nosniff",
   "Referrer-Policy": "strict-origin-when-cross-origin",
-  "Permissions-Policy": "camera=(), microphone=(), geolocation=(), browsing-topics=()",
+  "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
   "Strict-Transport-Security": "max-age=31536000; includeSubDomains; preload",
   // Inline scripts/styles are intentionally required by SSR until the UI is
   // extracted into hashed static assets. User data is never interpolated into
   // executable JS; JSON-LD is encoded with safeJsonForHtml.
-  "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https:; connect-src 'self'; base-uri 'self'; form-action 'self';",
+  "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: https:; connect-src 'self' https://cloudflareinsights.com; base-uri 'self'; form-action 'self';",
 };
 
 export const ALLOWED_ORIGINS = new Set(["https://ahkam.app", "https://ahkam.ateflaw.com", "https://ateflaw.com"]);
