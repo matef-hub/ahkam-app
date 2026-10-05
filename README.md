@@ -252,12 +252,22 @@ A unique match returns `found`, `master`, `texts`, and `principles`. If more tha
 
 | Route | Purpose |
 | --- | --- |
-| `/` | Search interface |
-| `/judgment/:id` | Server-rendered judgment page |
+| `/` | Search interface with interactive court statistics and debounced search |
+| `/courts/:slug` | Dedicated indexable court landing pages (`cassation-civil`, `cassation-criminal`, `constitutional`, `administrative-high`, `administrative`) |
+| `/judgment/:id` | Server-rendered judgment page with citation copying, bookmarking, and print layout |
+| `/api/court-judgments` | Cached court judgment listing with Keyset pagination |
 | `/robots.txt` | Crawler directives |
-| `/sitemap.xml` | Sitemap or sitemap index |
+| `/sitemap.xml` | Sitemap or sitemap index with accurate `<lastmod>` and court landing pages |
 | `/sitemap-:page.xml` | A 5,000-record sitemap page |
 | `/favicon.ico`, `/favicon.svg` | Worker-served application icon |
+
+## Research Workspace & Features
+
+- **Debounced Search-as-you-type:** Automatically queries after 350ms of typing inactivity, preventing server load and updating the URL via silent history replace.
+- **Interactive Court Filters:** Dynamic count cards allowing instant client-side and server-side filtering across the 5 primary judicial jurisdictions.
+- **Bookmarks & Saved Judgments:** Lawyers and legal researchers can save rulings to their workspace, review them in a dedicated tab, copy full citation lists, and export them.
+- **Citation Generator:** Instant one-click copying of official Egyptian legal citations formatted according to standard judicial practice.
+- **Multi-tier Rate Limiting:** Cloudflare Workers Rate Limiting binding with in-memory sliding-window fallback protecting `/api/search`, `/api/court-judgments`, and `/api/judgment`.
 
 ## Security and caching
 

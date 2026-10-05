@@ -39,18 +39,51 @@ function publicApiData(data) {
   return publicData;
 }
 
-// Optional: bind a Workers Rate Limiting namespace called SEARCH_LIMITER in
-// wrangler.toml (see the commented example there). Without the binding this is
-// a no-op, so deploying never breaks.
-async function isRateLimited(request, env) {
-  if (!env.SEARCH_LIMITER) return false;
-  try {
-    const key = request.headers.get("CF-Connecting-IP") || "unknown";
-    const { success } = await env.SEARCH_LIMITER.limit({ key });
-    return !success;
-  } catch {
+const ipBuckets = new Map();
+const RATE_LIMIT_WINDOW_MS = 60000;
+const ENDPOINT_LIMITS = {
+  "/api/search": 60,
+  "/api/court-judgments": 90,
+  "/api/judgment": 120,
+  "/api/courts": 120,
+};
+
+function checkInMemoryRateLimit(request, pathname = "/api/search") {
+  const ip = request.headers.get("CF-Connecting-IP") ||
+             request.headers.get("X-Forwarded-For")?.split(",")[0]?.trim() ||
+             "127.0.0.1";
+  const limit = ENDPOINT_LIMITS[pathname] || 80;
+  const now = Date.now();
+  const bucketKey = `${ip}:${pathname}`;
+
+  let entry = ipBuckets.get(bucketKey);
+  if (!entry || now - entry.resetTime > RATE_LIMIT_WINDOW_MS) {
+    ipBuckets.set(bucketKey, { count: 1, resetTime: now });
+    if (ipBuckets.size > 2000) {
+      for (const [k, v] of ipBuckets.entries()) {
+        if (now - v.resetTime > RATE_LIMIT_WINDOW_MS) ipBuckets.delete(k);
+      }
+    }
     return false;
   }
+
+  entry.count++;
+  return entry.count > limit;
+}
+
+// Binds to Cloudflare Workers Rate Limiting binding if available,
+// or falls back to robust in-memory sliding window rate limiting.
+async function isRateLimited(request, env, pathname = "/api/search") {
+  if (env && env.SEARCH_LIMITER) {
+    try {
+      const key = request.headers.get("CF-Connecting-IP") || "unknown";
+      const { success } = await env.SEARCH_LIMITER.limit({ key });
+      return !success;
+    } catch {
+      // Fallback to in-memory limiter on binding glitch
+    }
+  }
+  return checkInMemoryRateLimit(request, pathname);
 }
 
 function tooManyRequests(request) {
@@ -78,7 +111,7 @@ export async function handleApiSearch(request, env, url, ctx) {
   const cached = await matchCache(request);
   if (cached) return cached;
 
-  if (await isRateLimited(request, env)) return tooManyRequests(request);
+  if (await isRateLimited(request, env, "/api/search")) return tooManyRequests(request);
 
   try {
     const data = await searchJudgments(env.DB, validation);
@@ -96,7 +129,7 @@ export async function handleApiSearch(request, env, url, ctx) {
 export async function handleApiCourts(request, env, ctx) {
   const cached = await matchCache(request);
   if (cached) return cached;
-  if (await isRateLimited(request, env)) return tooManyRequests(request);
+  if (await isRateLimited(request, env, "/api/courts")) return tooManyRequests(request);
   try {
     const courts = await getCourts(env.DB);
     const resp = jsonResponse({ courts }, 200, 3600, request);
@@ -117,7 +150,7 @@ export async function handleApiJudgment(request, env, url, ctx) {
       if (!idValidation.valid) {
         return jsonResponse({ error: idValidation.error }, 400, 0, request);
       }
-      if (await isRateLimited(request, env)) return tooManyRequests(request);
+      if (await isRateLimited(request, env, "/api/judgment")) return tooManyRequests(request);
 
       const data = await getJudgmentById(env.DB, idValidation.id);
       return await judgmentResult(data, request, ctx);
@@ -128,7 +161,7 @@ export async function handleApiJudgment(request, env, url, ctx) {
       if (!caseValidation.valid) {
         return jsonResponse({ error: caseValidation.error }, 400, 0, request);
       }
-      if (await isRateLimited(request, env)) return tooManyRequests(request);
+      if (await isRateLimited(request, env, "/api/judgment")) return tooManyRequests(request);
 
       const data = await getJudgmentByCase(env.DB, caseValidation);
       return await judgmentResult(data, request, ctx);
@@ -144,7 +177,7 @@ export async function handleApiJudgment(request, env, url, ctx) {
 export async function handleApiCourtJudgments(request, env, url, ctx) {
   const cached = await matchCache(request);
   if (cached) return cached;
-  if (await isRateLimited(request, env)) return tooManyRequests(request);
+  if (await isRateLimited(request, env, "/api/court-judgments")) return tooManyRequests(request);
 
   try {
     const rawCourts = url.searchParams.get("court") || "";

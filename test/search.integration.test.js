@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 
-import { searchJudgments } from "../src/lib/db.js";
+import { searchJudgments, getCourtLandingData, COURT_SLUGS } from "../src/lib/db.js";
 
 function d1Adapter(sqlite) {
   return {
@@ -19,6 +19,7 @@ function d1Adapter(sqlite) {
         },
         all() { return this.execute(); },
         run() { return this.execute(); },
+        first() { const res = this.execute(); return res.results[0] || null; },
       };
     },
     batch(statements) { return statements.map((statement) => statement.execute()); },
@@ -89,5 +90,21 @@ test("normalized FTS migration can be replayed without duplicating index rows", 
   sqlite.exec(migration);
   const count = sqlite.prepare("SELECT COUNT(*) AS total FROM FTS_Judgments_Normalized").get().total;
   assert.equal(count, 6);
+  sqlite.close();
+});
+
+test("court landing page data is retrieved accurately for valid judicial slugs", async () => {
+  const sqlite = createFixture();
+  const db = d1Adapter(sqlite);
+  const data = await getCourtLandingData(db, "cassation-civil");
+  assert.ok(data);
+  assert.equal(data.slug, "cassation-civil");
+  assert.equal(data.totalJudgments, 2);
+  assert.ok(Array.isArray(data.judgments));
+  assert.ok(Array.isArray(data.allCourts));
+  assert.equal(data.allCourts.length, 5);
+
+  const invalid = await getCourtLandingData(db, "unknown-court");
+  assert.equal(invalid, null);
   sqlite.close();
 });

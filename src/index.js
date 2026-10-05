@@ -1,8 +1,8 @@
 import { SECURITY_HEADERS, handleOptions } from "./lib/security.js";
 import { handleApiSearch, handleApiJudgment, handleApiCourts, handleApiCourtJudgments } from "./routes/api.js";
 import { handleRobotsTxt, handleSitemap } from "./routes/seo.js";
-import { renderHomePageHtml, renderJudgmentPageHtml } from "./ui/templates.js";
-import { getHomeStats, getJudgmentById } from "./lib/db.js";
+import { renderHomePageHtml, renderJudgmentPageHtml, renderCourtLandingPageHtml } from "./ui/templates.js";
+import { getHomeStats, getJudgmentById, getCourtLandingData } from "./lib/db.js";
 import { matchCache, storeInCache } from "./lib/cache.js";
 
 const OFFICIAL_SVG_ICON = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 508 508"><circle cx="254" cy="254" r="254" fill="#84DBFF"/><path d="M80 438.8c45.6 42.8 106.8 69.2 174 69.2s128.4-26.4 174-69.2H80z" fill="#54C0EB"/><path d="M436.8 271.6h-64c-8.4 0-15.2-6.8-15.2-15.2V246h94.8v10c.8 8.8-6.4 15.6-14.8 15.6zM135.2 271.6h-64c-8.4 0-15.2-6.8-15.2-15.2V246h94.8v10c.8 8.8-6.4 15.6-14.8 15.6z" fill="#324A5E"/><path d="M282.4 401.6h-54.8c-8 0-14 6.4-14 14v4.4h83.2v-4.4c-.4-8-6.4-14.4-14.4-14.4z" fill="#2B3B4E"/><path d="M309.2 420H200.8c-10.4 0-18.8 8.4-18.8 18.8h145.6c0-10.4-8.4-18.8-18.4-18.8z" fill="#324A5E"/><circle cx="254.8" cy="183.6" r="22.4" fill="#E6E9EE"/></svg>`.trim();
@@ -109,6 +109,32 @@ export default {
       } catch (err) {
         console.error("SSR Judgment Render Failure:", err);
         return finish(errorResponse("حدث خطأ أثناء عرض الحكم", 500));
+      }
+    }
+
+    const courtMatch = url.pathname.match(/^\/courts\/([a-z-]+)$/);
+    if (courtMatch) {
+      const slug = courtMatch[1];
+      const cached = await matchCache(request);
+      if (cached) return finish(cached);
+
+      try {
+        const data = await getCourtLandingData(env.DB, slug);
+        if (!data) return finish(errorResponse("صفحة المحكمة غير موجودة", 404));
+
+        const html = renderCourtLandingPageHtml(data);
+        const resp = new Response(html, {
+          status: 200,
+          headers: {
+            ...SECURITY_HEADERS,
+            "Content-Type": "text/html; charset=utf-8",
+            "Cache-Control": "public, max-age=86400, s-maxage=86400, stale-while-revalidate=86400",
+          },
+        });
+        return finish(await storeInCache(request, resp, 86400, ctx));
+      } catch (err) {
+        console.error("SSR Court Landing Failure:", err);
+        return finish(errorResponse("حدث خطأ أثناء عرض صفحة المحكمة", 500));
       }
     }
 

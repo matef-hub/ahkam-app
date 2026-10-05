@@ -85,14 +85,22 @@ export async function handleSitemap(request, env, url, ctx) {
     }
 
     const rowsRes = await env.DB.prepare(
-      "SELECT Master_ID FROM Judgments_Master ORDER BY Master_ID ASC LIMIT 5000"
+      "SELECT Master_ID, Case_Date FROM Judgments_Master ORDER BY Master_ID ASC LIMIT 5000"
     ).all();
     const rows = rowsRes.results || [];
 
+    const courtSlugs = ["cassation-civil", "cassation-criminal", "constitutional", "administrative-high", "administrative"];
+
     let xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n`;
     xml += `  <url>\n    <loc>https://ahkam.app/</loc>\n    <changefreq>daily</changefreq>\n    <priority>1.0</priority>\n  </url>\n`;
+
+    for (const slug of courtSlugs) {
+      xml += `  <url>\n    <loc>https://ahkam.app/courts/${slug}</loc>\n    <changefreq>weekly</changefreq>\n    <priority>0.9</priority>\n  </url>\n`;
+    }
+
     for (const row of rows) {
-      xml += `  <url>\n    <loc>https://ahkam.app/judgment/${row.Master_ID}</loc>\n    <changefreq>monthly</changefreq>\n    <priority>0.8</priority>\n  </url>\n`;
+      const lastmod = row.Case_Date ? `\n    <lastmod>${row.Case_Date}</lastmod>` : "";
+      xml += `  <url>\n    <loc>https://ahkam.app/judgment/${row.Master_ID}</loc>${lastmod}\n    <changefreq>monthly</changefreq>\n    <priority>0.8</priority>\n  </url>\n`;
     }
     xml += `</urlset>`;
 

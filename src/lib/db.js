@@ -347,3 +347,71 @@ export async function recordSearchAnalytics(db, search, resultCount) {
     console.warn("Search analytics write skipped", error?.message || error);
   }
 }
+
+export const COURT_SLUGS = {
+  "cassation-civil": {
+    slug: "cassation-civil",
+    name: "محكمة النقض - الدائرة المدنية والتجارية",
+    shortName: "النقض المدني والتجاري",
+    courtIds: [1, 29],
+    badge: "⚖️ قضاء مدني وتجاري",
+    description: "أحكام وقرارات محكمة النقض المصرية الصادرة عن الدوائر المدنية، التجارية، العمالية، والأحوال الشخصية، متضمنة المبادئ المستقرة والقواعد القضائية الملزمة.",
+  },
+  "cassation-criminal": {
+    slug: "cassation-criminal",
+    name: "محكمة النقض - الدائرة الجنائية",
+    shortName: "النقض الجنائي",
+    courtIds: [2, 30],
+    badge: "📜 قضاء جنائي",
+    description: "أحكام وقرارات محكمة النقض المصرية الصادرة عن الدوائر الجنائية في الطعون وقضايا الجنايات والجنح وإرساء المبادئ القانونية الجنائية.",
+  },
+  "constitutional": {
+    slug: "constitutional",
+    name: "المحكمة الدستورية العليا",
+    shortName: "المحكمة الدستورية العليا",
+    courtIds: [4, 21, 25],
+    badge: "⚖️ رقابة دستورية",
+    description: "أحكام وقرارات المحكمة الدستورية العليا في الدعاوى الدستورية، والرقابة القضائية على دستورية القوانين واللوائح، وتنازع الاختصاص وتفسير النصوص التشريعية.",
+  },
+  "administrative-high": {
+    slug: "administrative-high",
+    name: "المحكمة الإدارية العليا - مجلس الدولة",
+    shortName: "المحكمة الإدارية العليا",
+    courtIds: [3, 37],
+    badge: "🏛️ قضاء إداري أعلى",
+    description: "أحكام وقرارات المحكمة الإدارية العليا بمجلس الدولة في الطعون الإدارية والقرارات السيادية والمنازعات الإدارية والتأديبية الكبرى.",
+  },
+  "administrative": {
+    slug: "administrative",
+    name: "محكمة القضاء الإداري - مجلس الدولة",
+    shortName: "محكمة القضاء الإداري",
+    courtIds: [31, 36, 47],
+    badge: "⚖️ مجلس الدولة",
+    description: "أحكام محكمة القضاء الإداري بمجلس الدولة ومحاكم القضاء الإداري الإقليمية في دعاوى إلغاء القرارات الإدارية ومنازعات العقود الإدارية والتعويضات.",
+  },
+};
+
+export async function getCourtLandingData(db, slug) {
+  const courtInfo = COURT_SLUGS[slug];
+  if (!courtInfo) return null;
+
+  const placeholders = courtInfo.courtIds.map(() => "?").join(",");
+  const [countMaster, countPrinciples, judgmentsRes, principlesRes] = await Promise.all([
+    db.prepare(`SELECT COUNT(*) AS total FROM Judgments_Master WHERE Court_ID IN (${placeholders})`).bind(...courtInfo.courtIds).first(),
+    db.prepare(`SELECT COUNT(*) AS total FROM Judgments_Principles WHERE Court_ID IN (${placeholders})`).bind(...courtInfo.courtIds).first(),
+    db.prepare(`SELECT m.Master_ID, m.Case_No, m.Case_Year, m.Office_Year, m.Case_Date, m.Court_ID, m.Master_Text, c.Court_Name
+      FROM Judgments_Master m LEFT JOIN Courts c ON c.Court_ID = m.Court_ID
+      WHERE m.Court_ID IN (${placeholders})
+      ORDER BY m.Case_Year DESC, m.Case_No DESC LIMIT 20`).bind(...courtInfo.courtIds).all(),
+    db.prepare(`SELECT Mogz_ID, Mogz_Text FROM Judgments_Principles WHERE Court_ID IN (${placeholders}) ORDER BY Mogz_ID ASC LIMIT 6`).bind(...courtInfo.courtIds).all(),
+  ]);
+
+  return {
+    ...courtInfo,
+    totalJudgments: Number(countMaster?.total || 0),
+    totalPrinciples: Number(countPrinciples?.total || 0),
+    judgments: judgmentsRes?.results || [],
+    principles: principlesRes?.results || [],
+    allCourts: Object.values(COURT_SLUGS),
+  };
+}

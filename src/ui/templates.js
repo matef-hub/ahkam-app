@@ -996,6 +996,10 @@ ${safeJsonForHtml({
         <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
         الاستعلام برقم الطعن
       </button>
+      <button id="tabSaved" class="tab-btn" role="tab" aria-selected="false" aria-controls="savedPanel" onclick="setMode('saved')">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/></svg>
+        الأحكام المحفوظة (<span id="savedCountBadge">0</span>)
+      </button>
     </div>
 
     <!-- Text Search Form -->
@@ -1034,7 +1038,7 @@ ${safeJsonForHtml({
         <input id="query" class="form-input has-icon" type="text" autocomplete="off" placeholder="اكتب عبارة أو بحثاً مركباً... (مثال: شيك مسئولية أو بطلان إعلان)">
       </div>
 
-      <button id="btnTextSearch" class="submit-btn" onclick="executeTextSearch(1)">
+      <button id="btnTextSearch" class="submit-btn" onclick="clearTimeout(debounceTimer); lastSearchedQuery = document.getElementById('query').value.trim(); executeTextSearch(1);">
         <span>بحث في الأحكام</span>
       </button>
 
@@ -1075,6 +1079,21 @@ ${safeJsonForHtml({
       <button id="btnCaseSearch" class="submit-btn" onclick="executeCaseSearch()">
         <span>استدعاء الحكم</span>
       </button>
+    </div>
+
+    <!-- Saved Judgments Panel (Research Workspace Foundation) -->
+    <div id="savedPanel" class="search-form" role="tabpanel" style="display:none; grid-template-columns: 1fr;">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; padding-bottom:12px; border-bottom:1px solid var(--border);">
+        <div>
+          <strong style="color:var(--primary); font-size:1.05rem;">⭐ مكتبة الأحكام المحفوظة (المفضلة القضائية)</strong>
+          <p style="margin:4px 0 0; color:var(--text-muted); font-size:0.85rem;">الأحكام التي قمت بحفظها أثناء أبحاثك القانونية على هذا الجهاز.</p>
+        </div>
+        <div style="display:flex; gap:8px;">
+          <button type="button" class="tool-btn" onclick="exportSavedCitations()">📋 نسخ كل الاستشهادات</button>
+          <button type="button" class="tool-btn" onclick="clearAllSavedJudgments()" style="color:#ef4444;">🗑️ تفريغ المحفوظات</button>
+        </div>
+      </div>
+      <div id="savedListContainer" style="margin-top:14px;"></div>
     </div>
   </section>
 
@@ -1121,12 +1140,13 @@ ${safeJsonForHtml({
       </div>
 
       <div class="footer-col">
-        <h3>🏛️ النطاق القضائي</h3>
+        <h3>🏛️ دوائر المحاكم القضائية</h3>
         <ul class="footer-links">
-          <li><a href="/" data-court="1,29"><span style="color:#3b82f6;">▪</span> محكمة النقض (الدوائر المدنية + السوابق)</a></li>
-          <li><a href="/" data-court="2,30"><span style="color:#3b82f6;">▪</span> محكمة النقض (الدوائر الجنائية + السوابق)</a></li>
-          <li><a href="/" data-court="4,25"><span style="color:#3b82f6;">▪</span> المحكمة الدستورية العليا + سوابقها</a></li>
-          <li><a href="/" data-court="3,31,36,37,47"><span style="color:#3b82f6;">▪</span> مجلس الدولة (كل المحاكم والسوابق)</a></li>
+          <li><a href="/courts/cassation-civil"><span style="color:#3b82f6;">▪</span> محكمة النقض - الدائرة المدنية والتجارية</a></li>
+          <li><a href="/courts/cassation-criminal"><span style="color:#3b82f6;">▪</span> محكمة النقض - الدائرة الجنائية</a></li>
+          <li><a href="/courts/constitutional"><span style="color:#3b82f6;">▪</span> المحكمة الدستورية العليا</a></li>
+          <li><a href="/courts/administrative-high"><span style="color:#3b82f6;">▪</span> المحكمة الإدارية العليا (مجلس الدولة)</a></li>
+          <li><a href="/courts/administrative"><span style="color:#3b82f6;">▪</span> محكمة القضاء الإداري (مجلس الدولة)</a></li>
         </ul>
       </div>
 
@@ -1205,25 +1225,42 @@ function setMode(mode) {
   currentMode = mode;
   const textSearch = document.getElementById("textSearch");
   const caseSearch = document.getElementById("caseSearch");
+  const savedPanel = document.getElementById("savedPanel");
   const tabText = document.getElementById("tabText");
   const tabCase = document.getElementById("tabCase");
+  const tabSaved = document.getElementById("tabSaved");
+
+  [tabText, tabCase, tabSaved].forEach((tab) => {
+    if (tab) {
+      tab.classList.remove("active");
+      tab.setAttribute("aria-selected", "false");
+    }
+  });
+  if (textSearch) textSearch.style.display = "none";
+  if (caseSearch) caseSearch.style.display = "none";
+  if (savedPanel) savedPanel.style.display = "none";
 
   if (mode === "text") {
-    textSearch.style.display = "grid";
-    caseSearch.style.display = "none";
-    tabText.classList.add("active");
-    tabText.setAttribute("aria-selected", "true");
-    tabCase.classList.remove("active");
-    tabCase.setAttribute("aria-selected", "false");
-    document.getElementById("query").focus();
-  } else {
-    textSearch.style.display = "none";
-    caseSearch.style.display = "grid";
-    tabCase.classList.add("active");
-    tabCase.setAttribute("aria-selected", "true");
-    tabText.classList.remove("active");
-    tabText.setAttribute("aria-selected", "false");
-    document.getElementById("caseNo").focus();
+    if (textSearch) textSearch.style.display = "grid";
+    if (tabText) {
+      tabText.classList.add("active");
+      tabText.setAttribute("aria-selected", "true");
+    }
+    document.getElementById("query")?.focus();
+  } else if (mode === "case") {
+    if (caseSearch) caseSearch.style.display = "grid";
+    if (tabCase) {
+      tabCase.classList.add("active");
+      tabCase.setAttribute("aria-selected", "true");
+    }
+    document.getElementById("caseNo")?.focus();
+  } else if (mode === "saved") {
+    if (savedPanel) savedPanel.style.display = "grid";
+    if (tabSaved) {
+      tabSaved.classList.add("active");
+      tabSaved.setAttribute("aria-selected", "true");
+    }
+    renderSavedJudgments();
   }
 }
 
@@ -1300,15 +1337,17 @@ function sortLabel(sort) {
   return ({ relevance: "الأكثر صلة", newest: "الأحدث", oldest: "الأقدم" })[sort] || "الأكثر صلة";
 }
 
-async function executeTextSearch(page = 1, { pushHistory = true, cursor = undefined } = {}) {
+async function executeTextSearch(page = 1, { pushHistory = true, cursor = undefined, silent = false } = {}) {
   const query = document.getElementById("query").value.trim();
   const searchOptions = selectedSearchOptions();
   const { courtId, scope, mode, sort } = searchOptions;
   syncStatButtons(courtId || "");
 
   if (!query) {
-    showToast("يرجى إدخال نص للبحث أولاً");
-    document.getElementById("query").focus();
+    if (!silent) {
+      showToast("يرجى إدخال نص للبحث أولاً");
+      document.getElementById("query").focus();
+    }
     return;
   }
 
@@ -1435,12 +1474,14 @@ function renderSearchResults(data, sort = selectedSearchOptions().sort) {
             <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7"/></svg>
           </a>
           <button type="button" class="tool-btn" onclick="copySearchResultLink(\${item.Master_ID})">نسخ الرابط</button>
+          <button type="button" class="tool-btn" data-save-id="\${item.Master_ID}" onclick="toggleSaveFromCard(event, \${item.Master_ID}, '\${escapeHtml(item.Court_Name || 'محكمة النقض')}', \${item.Case_No}, \${item.Case_Year}, '\${escapeHtml(item.Case_Date || '')}')">☆ حفظ</button>
         </div>
       </article>
     \`;
   }
 
   container.innerHTML = html;
+  updateSaveButtons();
   renderPagination(data);
 }
 
@@ -1472,6 +1513,39 @@ function renderPagination(data) {
 }
 
 let currentCourtFilter = "";
+let debounceTimer = null;
+let lastSearchedQuery = "";
+
+function onQueryInput() {
+  clearTimeout(debounceTimer);
+  const input = document.getElementById("query");
+  if (!input) return;
+  const query = input.value.trim();
+
+  // If input was cleared by user
+  if (!query) {
+    lastSearchedQuery = "";
+    cancelActiveRequest();
+    if (currentCourtFilter) {
+      loadJudgmentsByCourt(currentCourtFilter, 1);
+    } else {
+      document.getElementById("results").innerHTML = "";
+      document.getElementById("pagination").style.display = "none";
+      hideStats();
+    }
+    return;
+  }
+
+  // Need at least 2 characters for valid search
+  if (query.length < 2) return;
+  if (query === lastSearchedQuery) return;
+
+  // Debounced search: 350ms delay
+  debounceTimer = setTimeout(() => {
+    lastSearchedQuery = query;
+    executeTextSearch(1, { pushHistory: false, silent: true });
+  }, 350);
+}
 
 function syncStatButtons(courtId = "") {
   currentCourtFilter = courtId || "";
@@ -1578,6 +1652,97 @@ async function loadJudgmentsByCourt(courtId = "", page = 1) {
 
 function copySearchResultLink(masterId) {
   copyToClipboard(new URL("/judgment/" + masterId, window.location.origin).href, "تم نسخ رابط الحكم");
+}
+
+function getSavedJudgments() {
+  try { return JSON.parse(localStorage.getItem("ahkam_saved_judgments") || "[]"); } catch { return []; }
+}
+
+function updateSavedBadge() {
+  const list = getSavedJudgments();
+  const badge = document.getElementById("savedCountBadge");
+  if (badge) badge.textContent = String(list.length);
+}
+
+function toggleSaveFromCard(event, masterId, courtName, caseNo, caseYear, caseDate) {
+  if (event) event.stopPropagation();
+  let list = getSavedJudgments();
+  const idx = list.findIndex(item => item.masterId === masterId);
+  if (idx >= 0) {
+    list.splice(idx, 1);
+    showToast("تم إزالة الحكم من المفضلة");
+  } else {
+    list.unshift({ masterId, courtName, caseNo, caseYear, caseDate });
+    showToast("تم حفظ الحكم في المفضلة ⭐");
+  }
+  localStorage.setItem("ahkam_saved_judgments", JSON.stringify(list));
+  updateSavedBadge();
+  updateSaveButtons();
+  if (currentMode === "saved") renderSavedJudgments();
+}
+
+function updateSaveButtons() {
+  const list = getSavedJudgments();
+  const ids = new Set(list.map(i => i.masterId));
+  document.querySelectorAll("[data-save-id]").forEach(btn => {
+    const id = Number(btn.dataset.saveId);
+    const isSaved = ids.has(id);
+    btn.textContent = isSaved ? "⭐ محفوظ" : "☆ حفظ";
+    btn.style.color = isSaved ? "#2563eb" : "";
+    btn.style.fontWeight = isSaved ? "700" : "";
+  });
+}
+
+function renderSavedJudgments() {
+  const container = document.getElementById("savedListContainer");
+  if (!container) return;
+  const list = getSavedJudgments();
+  if (!list.length) {
+    container.innerHTML = '<div class="empty-state" style="padding:28px;">لم تقم بحفظ أي أحكام في المفضلة بعد. يمكنك حفظ أي حكم أثناء تصفح النتائج بالضغط على زر "حفظ".</div>';
+    return;
+  }
+  let html = '<div style="display:flex; flex-direction:column; gap:10px;">';
+  for (const item of list) {
+    html += '<div style="background:var(--surface); border:1px solid var(--border); padding:14px 18px; border-radius:8px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">' +
+      '<div><strong style="color:var(--primary); font-size:0.95rem;">' + escapeHtml(item.courtName || "محكمة النقض") + '</strong> — ' +
+      '<span>الطعن رقم ' + escapeHtml(String(item.caseNo)) + ' لسنة ' + escapeHtml(String(item.caseYear)) + ' ق</span>' +
+      (item.caseDate ? '<span style="color:var(--text-muted); font-size:0.85rem; margin-right:8px;">(جلسة ' + escapeHtml(item.caseDate) + ')</span>' : '') +
+      '</div>' +
+      '<div style="display:flex; gap:8px;">' +
+      '<a href="/judgment/' + item.masterId + '" class="open-btn" style="padding:6px 14px; font-size:0.85rem;" onclick="navigateToJudgment(event, ' + item.masterId + ')">فتح الحكم</a>' +
+      '<button type="button" class="tool-btn" style="padding:6px 12px; font-size:0.85rem;" onclick="copySavedItemCitation(\'' + escapeHtml(item.courtName || "المحكمة") + '\', \'' + escapeHtml(String(item.caseNo)) + '\', \'' + escapeHtml(String(item.caseYear)) + '\', \'' + escapeHtml(item.caseDate || '') + '\')">نسخ الاستشهاد</button>' +
+      '<button type="button" class="tool-btn" style="padding:6px 12px; font-size:0.85rem; color:#ef4444;" onclick="toggleSaveFromCard(null, ' + item.masterId + ')">حذف ✕</button>' +
+      '</div></div>';
+  }
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+function copySavedItemCitation(court, no, yr, date) {
+  const cit = court + " - الطعن رقم " + no + " لسنة " + yr + " قضائية" + (date ? " - جلسة " + date : "");
+  copyToClipboard(cit, "تم نسخ الاستشهاد القانوني");
+}
+
+function exportSavedCitations() {
+  const list = getSavedJudgments();
+  if (!list.length) return showToast("لا توجد أحكام محفوظة لنسخها");
+  const text = list.map((item, idx) => (idx + 1) + ". " + item.courtName + " - الطعن رقم " + item.caseNo + " لسنة " + item.caseYear + " قضائية" + (item.caseDate ? " - جلسة " + item.caseDate : "")).join("\n");
+  copyToClipboard(text, "تم نسخ استشهادات جميع الأحكام المحفوظة");
+}
+
+function clearAllSavedJudgments() {
+  if (confirm("هل أنت متأكد من تفريغ قائمة الأحكام المحفوظة؟")) {
+    localStorage.removeItem("ahkam_saved_judgments");
+    updateSavedBadge();
+    renderSavedJudgments();
+    updateSaveButtons();
+    showToast("تم تفريغ المحفوظات");
+  }
+}
+
+function copyPrincipleDirect(btn) {
+  const text = btn.previousElementSibling?.textContent?.replace(/^⚖️\s*/, "") || "";
+  copyToClipboard(text, "تم نسخ المبدأ القانوني بنجاح");
 }
 
 async function loadCourtOptions() {
@@ -1845,6 +2010,7 @@ window.addEventListener("popstate", (e) => {
 
 document.addEventListener("DOMContentLoaded", () => {
   loadCourtOptions();
+  updateSavedBadge();
   const params = new URLSearchParams(window.location.search);
   if (params.has("q")) {
     document.getElementById("query").value = params.get("q");
@@ -1855,9 +2021,17 @@ document.addEventListener("DOMContentLoaded", () => {
     });
     executeTextSearch(parseInt(params.get("page") || "1", 10), { pushHistory: false });
   }
-  document.getElementById("query").addEventListener("keydown", (e) => {
-    if (e.key === "Enter") executeTextSearch(1);
-  });
+  const queryInput = document.getElementById("query");
+  if (queryInput) {
+    queryInput.addEventListener("input", onQueryInput);
+    queryInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        clearTimeout(debounceTimer);
+        lastSearchedQuery = queryInput.value.trim();
+        executeTextSearch(1, { pushHistory: true, silent: false });
+      }
+    });
+  }
   document.getElementById("caseYear").addEventListener("keydown", (e) => {
     if (e.key === "Enter") executeCaseSearch();
   });
@@ -1991,7 +2165,14 @@ ${jsonLdHtml}
         <div class="judgment-toolbar">
           <button class="tool-btn" onclick="copyJudgmentCitation()">📋 نسخ الاستشهاد القانوني</button>
           <button class="tool-btn" onclick="copyJudgmentLink()">🔗 نسخ الرابط</button>
+          <button class="tool-btn" id="btnSaveFull" onclick="toggleSaveFullJudgment()">⭐ حفظ في المفضلة</button>
           <button class="tool-btn" onclick="window.print()">🖨️ طباعة الحكم</button>
+        </div>
+
+        <div style="background:var(--surface-muted); border:1px solid var(--border); padding:10px 16px; border-radius:6px; margin-top:14px; font-size:0.82rem; color:var(--text-muted); display:flex; gap:16px; flex-wrap:wrap;">
+          <span>📁 المصدر الرسمي: <strong>المكتب الفني لمحكمة النقض ومجلس الدولة</strong></span>
+          <span>🕒 حالة الفهرسة: <strong>نص كامل معتمد ومفهرس</strong></span>
+          <span>🔢 المعرف الرقمي: <strong>#${master.Master_ID}</strong></span>
         </div>
       </header>
 
@@ -2005,7 +2186,12 @@ ${jsonLdHtml}
       ${data.principles && data.principles.length ? `
       <h2 style="color:var(--primary); font-size:1.25rem; margin: 24px 0 10px;">المبادئ القانونية المستخلصة</h2>
       <div class="principles-wrapper">
-        ${data.principles.map(p => `<div class="principle-box">⚖️ ${escapeHtml(p.Mogz_Text)}</div>`).join("")}
+        ${data.principles.map(p => `
+          <div class="principle-box" style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px;">
+            <span>⚖️ ${escapeHtml(p.Mogz_Text)}</span>
+            <button type="button" class="tool-btn" style="flex-shrink:0; font-size:0.8rem;" onclick="copyPrinciple(this)">نسخ المبدأ</button>
+          </div>
+        `).join("")}
       </div>
       ` : ""}
 
@@ -2054,6 +2240,16 @@ ${jsonLdHtml}
         <div style="font-size: 0.85rem; color: #cbd5e1; margin-top: 8px;">
           تطوير وإشراف: <strong>أ / محمد عاطف محمد</strong> (محامٍ ومطور برمجيات)
         </div>
+      </div>
+      <div class="footer-col">
+        <h3>🏛️ دوائر المحاكم القضائية</h3>
+        <ul class="footer-links">
+          <li><a href="/courts/cassation-civil"><span style="color:#3b82f6;">▪</span> محكمة النقض - الدائرة المدنية والتجارية</a></li>
+          <li><a href="/courts/cassation-criminal"><span style="color:#3b82f6;">▪</span> محكمة النقض - الدائرة الجنائية</a></li>
+          <li><a href="/courts/constitutional"><span style="color:#3b82f6;">▪</span> المحكمة الدستورية العليا</a></li>
+          <li><a href="/courts/administrative-high"><span style="color:#3b82f6;">▪</span> المحكمة الإدارية العليا (مجلس الدولة)</a></li>
+          <li><a href="/courts/administrative"><span style="color:#3b82f6;">▪</span> محكمة القضاء الإداري (مجلس الدولة)</a></li>
+        </ul>
       </div>
       <div class="footer-col">
         <h3>📌 إخلاء مسؤولية قانونية</h3>
@@ -2118,6 +2314,347 @@ function copyJudgmentCitation() {
 
 function copyJudgmentLink() {
   copyToClipboard(new URL("/judgment/" + judgmentData.Master_ID, window.location.origin).href, "تم نسخ رابط الحكم");
+}
+
+function copyPrinciple(btn) {
+  const text = btn.previousElementSibling?.textContent?.replace(/^⚖️\s*/, "") || "";
+  copyToClipboard(text, "تم نسخ المبدأ القانوني بنجاح");
+}
+
+function toggleSaveFullJudgment() {
+  const m = judgmentData;
+  let saved = [];
+  try { saved = JSON.parse(localStorage.getItem("ahkam_saved_judgments") || "[]"); } catch {}
+  const idx = saved.findIndex(item => item.masterId === m.Master_ID);
+  const btn = document.getElementById("btnSaveFull");
+  if (idx >= 0) {
+    saved.splice(idx, 1);
+    if (btn) btn.textContent = "☆ حفظ في المفضلة";
+    showToast("تم إزالة الحكم من المفضلة");
+  } else {
+    saved.unshift({ masterId: m.Master_ID, courtName: m.Court_Name, caseNo: m.Case_No, caseYear: m.Case_Year, caseDate: m.Case_Date });
+    if (btn) btn.textContent = "⭐ محفوظ في المفضلة";
+    showToast("تم حفظ الحكم في المفضلة ⭐");
+  }
+  localStorage.setItem("ahkam_saved_judgments", JSON.stringify(saved));
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  let saved = [];
+  try { saved = JSON.parse(localStorage.getItem("ahkam_saved_judgments") || "[]"); } catch {}
+  const isSaved = saved.some(item => item.masterId === judgmentData.Master_ID);
+  const btn = document.getElementById("btnSaveFull");
+  if (btn && isSaved) btn.textContent = "⭐ محفوظ في المفضلة";
+});
+</script>
+</body>
+</html>`;
+}
+
+export function renderCourtLandingPageHtml(courtData) {
+  const title = escapeHtml(`${courtData.name} | موسوعة الأحكام القضائية المصرية`);
+  const description = escapeHtml(courtData.description);
+  const canonical = `https://ahkam.app/courts/${courtData.slug}`;
+
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "CollectionPage",
+    "name": courtData.name,
+    "description": courtData.description,
+    "url": canonical,
+    "breadcrumb": {
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        { "@type": "ListItem", "position": 1, "name": "الرئيسية", "item": "https://ahkam.app/" },
+        { "@type": "ListItem", "position": 2, "name": "المحاكم والدوائر القضائية", "item": "https://ahkam.app/" },
+        { "@type": "ListItem", "position": 3, "name": courtData.shortName, "item": canonical }
+      ]
+    },
+    "isPartOf": {
+      "@type": "WebSite",
+      "name": "موسوعة الأحكام القضائية المصرية",
+      "url": "https://ahkam.app/"
+    }
+  };
+  const jsonLdHtml = safeJsonForHtml(jsonLd);
+
+  return `<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${title}</title>
+<meta name="description" content="${description}">
+<link rel="canonical" href="${canonical}">
+<meta property="og:title" content="${title}">
+<meta property="og:description" content="${description}">
+<meta property="og:type" content="website">
+<meta property="og:url" content="${canonical}">
+<meta property="og:site_name" content="موسوعة الأحكام القضائية المصرية">
+<meta property="og:locale" content="ar_EG">
+<meta name="twitter:card" content="summary">
+<meta name="theme-color" content="#0f2a4a">
+
+<script type="application/ld+json">
+${jsonLdHtml}
+</script>
+
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="alternate icon" href="/favicon.ico">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+
+<style>${SHARED_STYLES}
+.court-hero-card {
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 30px 26px;
+  box-shadow: var(--shadow-sm);
+  margin-bottom: 24px;
+}
+.court-hero-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 12px;
+}
+.court-hero-title {
+  font-size: 1.45rem;
+  font-weight: 900;
+  color: var(--primary);
+  margin: 0;
+}
+.court-hero-desc {
+  font-size: 0.95rem;
+  line-height: 1.9;
+  color: var(--text-sub);
+  margin-bottom: 18px;
+}
+.court-stats-pills {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.court-stat-pill {
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  padding: 8px 14px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--primary);
+}
+.court-direct-search {
+  margin: 20px 0 6px;
+  display: flex;
+  gap: 10px;
+}
+.court-direct-search input {
+  flex: 1;
+  padding: 12px 16px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-md);
+  font-family: inherit;
+  font-size: 0.95rem;
+}
+.court-direct-search button {
+  background: var(--primary);
+  color: white;
+  border: none;
+  border-radius: var(--radius-md);
+  padding: 0 22px;
+  font-family: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.court-direct-search button:hover {
+  background: var(--primary-light);
+}
+.other-courts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+.other-court-card {
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+  text-decoration: none;
+  color: inherit;
+  transition: all 0.2s;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+.other-court-card:hover {
+  border-color: var(--primary-light);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(15, 42, 74, 0.08);
+}
+.other-court-card strong {
+  color: var(--primary);
+  font-size: 0.95rem;
+  margin-bottom: 6px;
+}
+.other-court-card span {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+</style>
+</head>
+<body>
+
+<div class="top-dev-bar">
+  <span>⚖️ إشراف وبناء قاعدة البيانات:</span>
+  <span class="dev-name">أ / محمد عاطف محمد</span>
+  <span>(محامٍ ومطور برمجيات)</span>
+</div>
+
+<div class="container">
+  <header class="header">
+    <a href="/" class="brand">
+      <div style="width: 50px; height: 50px; display:flex; align-items:center; justify-content:center;">
+        <img src="/favicon.svg" alt="شعار الموسوعة" width="48" height="48">
+      </div>
+      <div>
+        <div class="brand-title">موسوعة الأحكام القضائية المصرية</div>
+        <div class="brand-subtitle">محكمة النقض • الدستورية العليا • مجلس الدولة</div>
+      </div>
+    </a>
+  </header>
+
+  <nav class="back-btn-row" style="margin-bottom: 16px;">
+    <a href="/" class="back-btn">
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>
+      <span>الرجوع إلى صفحة البحث العامة</span>
+    </a>
+  </nav>
+
+  <main>
+    <article class="court-hero-card">
+      <div class="court-hero-header">
+        <span style="font-size: 2rem;">🏛️</span>
+        <h1 class="court-hero-title">${escapeHtml(courtData.name)}</h1>
+      </div>
+      <p class="court-hero-desc">${escapeHtml(courtData.description)}</p>
+      
+      <div class="court-stats-pills">
+        <div class="court-stat-pill">🏛️ إجمالي الأحكام المفهرسة: ${escapeHtml(courtData.totalJudgments.toLocaleString("ar-EG"))}</div>
+        <div class="court-stat-pill">📜 المبادئ المستخلصة: ${escapeHtml(courtData.totalPrinciples.toLocaleString("ar-EG"))}</div>
+        <div class="court-stat-pill">${escapeHtml(courtData.badge)}</div>
+      </div>
+
+      <form action="/" method="GET" class="court-direct-search" role="search" aria-label="بحث في أحكام هذه المحكمة">
+        <input type="hidden" name="court" value="${escapeHtml(courtData.courtIds.join(","))}">
+        <input type="text" name="q" placeholder="ابحث في أحكام ومبادئ ${escapeHtml(courtData.shortName)}..." required minlength="2">
+        <button type="submit">بحث مخصص</button>
+      </form>
+    </article>
+
+    <section aria-labelledby="judgments-heading" style="margin-bottom: 32px;">
+      <h2 id="judgments-heading" style="color:var(--primary); font-size:1.3rem; margin-bottom:14px; font-weight:800;">
+        أحدث الأحكام القضائية الصادرة عن ${escapeHtml(courtData.shortName)}
+      </h2>
+      ${courtData.judgments.length ? courtData.judgments.map(item => `
+        <article class="judgment-card">
+          <div class="badges-row">
+            <span class="law-badge badge-court">${escapeHtml(item.Court_Name || courtData.shortName)}</span>
+            <span class="law-badge badge-gold">طعن رقم ${escapeHtml(item.Case_No)}</span>
+            <span class="law-badge badge-blue">لسنة ${escapeHtml(item.Case_Year)} قضائية</span>
+            ${item.Case_Date ? `<span class="law-badge badge-gray">${escapeHtml(item.Case_Date)}</span>` : ""}
+          </div>
+          <h3 class="card-title">
+            <a href="/judgment/${item.Master_ID}">
+              حكم في الطعن رقم ${escapeHtml(item.Case_No)} لسنة ${escapeHtml(item.Case_Year)} قضائية
+            </a>
+          </h3>
+          ${item.Master_Text ? `
+          <div class="match-snippet-box">
+            <span class="fakra-type-tag">موجز الدعوى / المنطوق</span>
+            <div>${escapeHtml(item.Master_Text.slice(0, 260))}${item.Master_Text.length > 260 ? "..." : ""}</div>
+          </div>` : ""}
+          <div class="card-actions">
+            <a href="/judgment/${item.Master_ID}" class="open-btn">
+              <span>فتح ملف الحكم كاملاً</span>
+              <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7"/></svg>
+            </a>
+          </div>
+        </article>
+      `).join("") : `<div class="empty-state">لا توجد أحكام مدرجة حالياً لهذه المحكمة.</div>`}
+    </section>
+
+    ${courtData.principles.length ? `
+    <section aria-labelledby="principles-heading" style="margin-bottom: 32px;">
+      <h2 id="principles-heading" style="color:var(--primary); font-size:1.3rem; margin-bottom:14px; font-weight:800;">
+        أبرز المبادئ القانونية المستخلصة
+      </h2>
+      <div class="principles-wrapper">
+        ${courtData.principles.map(p => `
+          <div class="principle-box" style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px;">
+            <span>⚖️ ${escapeHtml(p.Mogz_Text)}</span>
+            <button type="button" class="tool-btn" style="flex-shrink:0;" onclick="copyPrincipleDirect(this)">نسخ المبدأ</button>
+          </div>
+        `).join("")}
+      </div>
+    </section>` : ""}
+
+    <section aria-labelledby="other-courts-heading" style="margin-top: 36px;">
+      <h2 id="other-courts-heading" style="color:var(--primary); font-size:1.15rem; margin-bottom:12px; font-weight:800;">
+        تصفح باقي المحاكم والدوائر القضائية المصرية
+      </h2>
+      <div class="other-courts-grid">
+        ${courtData.allCourts.filter(c => c.slug !== courtData.slug).map(c => `
+          <a href="/courts/${c.slug}" class="other-court-card">
+            <strong>${escapeHtml(c.shortName)}</strong>
+            <span>${escapeHtml(c.badge)}</span>
+          </a>
+        `).join("")}
+      </div>
+    </section>
+  </main>
+</div>
+
+<footer class="site-footer">
+  <div class="container">
+    <div class="footer-grid">
+      <div class="footer-col">
+        <h3>⚖️ موسوعة الأحكام القضائية المصرية</h3>
+        <p class="footer-desc">
+          منصة رقمية بحثية مستقلة تهدف إلى إتاحة أحكام وقرارات محكمة النقض، المحكمة الدستورية العليا، ومجلس الدولة لجمهور الباحثين والمشتغلين بالقانون بالاعتماد على أحدث تقنيات الفهرسة السحابية فائقة السرعة.
+        </p>
+      </div>
+      <div class="footer-col">
+        <h3>🏛️ دوائر المحاكم القضائية</h3>
+        <ul class="footer-links">
+          <li><a href="/courts/cassation-civil">أحكام النقض المدني والتجاري</a></li>
+          <li><a href="/courts/cassation-criminal">أحكام النقض الجنائي</a></li>
+          <li><a href="/courts/constitutional">أحكام المحكمة الدستورية العليا</a></li>
+          <li><a href="/courts/administrative-high">أحكام المحكمة الإدارية العليا</a></li>
+          <li><a href="/courts/administrative">أحكام محكمة القضاء الإداري</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <div class="footer-bottom-copy">
+        جميع الحقوق محفوظة © موسوعة الأحكام القضائية المصرية (ahkam.app)
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script>
+function copyPrincipleDirect(btn) {
+  const text = btn.previousElementSibling?.textContent?.replace(/^⚖️\s*/, "") || "";
+  navigator.clipboard.writeText(text).then(() => {
+    const orig = btn.textContent;
+    btn.textContent = "تم النسخ ✓";
+    setTimeout(() => btn.textContent = orig, 2000);
+  });
 }
 </script>
 </body>
