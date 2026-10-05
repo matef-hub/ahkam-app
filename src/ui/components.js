@@ -1,11 +1,20 @@
 import { escapeHtml } from "../lib/arabic.js";
 
+export const FONT_LINKS = `
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400;1,700&family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">`;
+
 export function renderTopDevBar() {
   return `
 <div class="top-dev-bar">
-  <span>⚖️ إشراف وبناء قاعدة البيانات:</span>
-  <span class="dev-name">أ / محمد عاطف محمد</span>
-  <span>(محامٍ ومطور برمجيات)</span>
+  <div class="container top-dev-content">
+    <span>⚖️ قاعدة البيانات والمكنز القضائي الموحد</span>
+    <span class="dev-divider">|</span>
+    <span>إشراف وتطوير:</span>
+    <span class="dev-name">أ / محمد عاطف محمد</span>
+    <span class="dev-role">(محامٍ ومبرمج)</span>
+  </div>
 </div>`;
 }
 
@@ -14,28 +23,28 @@ export function renderHeader({ badgeId = "headerSavedBadge", isHome = false, sho
   return `
   <header class="header">
     <a href="/" class="brand">
-      <div style="width: 50px; height: 50px; display:flex; align-items:center; justify-content:center;">
-        <img src="/favicon.svg" alt="شعار الموسوعة" width="48" height="48">
+      <div class="brand-crest" aria-hidden="true">
+        <img src="/favicon.svg" alt="شعار الموسوعة" width="46" height="46">
       </div>
-      <div>
+      <div class="brand-text">
         <${brandTitleTag} class="brand-title">موسوعة الأحكام القضائية المصرية</${brandTitleTag}>
-        <div class="brand-subtitle">محكمة النقض • الدستورية العليا • مجلس الدولة</div>
+        <div class="brand-subtitle">محكمة النقض • المحكمة الدستورية العليا • مجلس الدولة</div>
       </div>
     </a>
     <div class="header-actions">
       ${showSaved ? (isHome ? `
       <button type="button" class="header-saved-btn" onclick="openSavedJudgmentsTab()" title="عرض الأحكام المحفوظة">
-        <span>⭐ المفضلة</span>
+        <span>⭐ الأحكام المحفوظة</span>
         <span class="saved-count-pill" id="${badgeId}">0</span>
       </button>` : `
       <a href="/?tab=saved" class="header-saved-btn" title="عرض الأحكام المحفوظة">
-        <span>⭐ المفضلة</span>
+        <span>⭐ الأحكام المحفوظة</span>
         <span class="saved-count-pill" id="${badgeId}">0</span>
       </a>`) : ""}
       ${isHome ? `
       <div class="header-status" role="status">
         <span class="status-dot"></span>
-        <span>قاعدة الأحكام متاحة للبحث</span>
+        <span>المكنز متاح للبحث الفوري</span>
       </div>` : ""}
     </div>
   </header>`;

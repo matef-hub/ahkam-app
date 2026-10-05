@@ -1,6 +1,6 @@
 import { escapeHtml, safeJsonForHtml } from "../lib/arabic.js";
 import { SHARED_STYLES } from "./styles.js";
-import { renderTopDevBar, renderHeader, renderSiteFooter } from "./components.js";
+import { renderTopDevBar, renderHeader, renderSiteFooter, FONT_LINKS } from "./components.js";
 
 export function renderHomePageHtml(stats = null) {
   return `<!DOCTYPE html>
@@ -18,7 +18,7 @@ export function renderHomePageHtml(stats = null) {
 <meta property="og:site_name" content="موسوعة الأحكام القضائية المصرية">
 <meta property="og:locale" content="ar_EG">
 <meta name="twitter:card" content="summary">
-<meta name="theme-color" content="#0f2a4a">
+<meta name="theme-color" content="#0a192f">
 <script type="application/ld+json">
 ${safeJsonForHtml({
   "@context": "https://schema.org",
@@ -36,9 +36,7 @@ ${safeJsonForHtml({
 
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="alternate icon" href="/favicon.ico">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+${FONT_LINKS}
 
 <style>${SHARED_STYLES}</style>
 </head>
@@ -139,11 +137,28 @@ ${renderTopDevBar()}
         <label for="query" class="sr-only">نص البحث القانوني</label>
         <svg class="input-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
         <input id="query" class="form-input has-icon" type="text" autocomplete="off" placeholder="اكتب عبارة أو بحثاً مركباً... (مثال: شيك مسئولية أو بطلان إعلان)">
+        <kbd class="search-kbd" title="اضغط على زر / من لوحة المفاتيح للتركيز الفوري">/</kbd>
       </div>
 
       <button id="btnTextSearch" class="submit-btn" onclick="clearTimeout(debounceTimer); lastSearchedQuery = document.getElementById('query').value.trim(); executeTextSearch(1);">
         <span>بحث في الأحكام</span>
       </button>
+
+      <div class="quick-topics-bar">
+        <span class="topics-label">⚖️ موضوعات شائعة:</span>
+        <div class="topics-scroll">
+          <button type="button" class="topic-chip" onclick="quickSearch('بطلان إعلان')">بطلان إعلان</button>
+          <button type="button" class="topic-chip" onclick="quickSearch('شيك بدون رصيد')">شيك بدون رصيد</button>
+          <button type="button" class="topic-chip" onclick="quickSearch('التعويض عن الضرر')">التعويض عن الضرر</button>
+          <button type="button" class="topic-chip" onclick="quickSearch('حجية الأمر المقضي')">حجية الأمر المقضي</button>
+          <button type="button" class="topic-chip" onclick="quickSearch('صورية العقد')">صورية العقد</button>
+          <button type="button" class="topic-chip" onclick="quickSearch('الشفعة')">حق الشفعة</button>
+          <button type="button" class="topic-chip" onclick="quickSearch('التعسف في استعمال الحق')">التعسف في استعمال الحق</button>
+          <button type="button" class="topic-chip" onclick="quickSearch('انتفاء القصد الجنائي')">انتفاء القصد الجنائي</button>
+          <button type="button" class="topic-chip" onclick="quickSearch('سلطة محكمة الموضوع')">سلطة محكمة الموضوع</button>
+          <button type="button" class="topic-chip" onclick="quickSearch('فسخ العقد')">فسخ العقد والشرط الفاسخ</button>
+        </div>
+      </div>
 
       <details class="advanced-filters">
         <summary>فلاتر متقدمة</summary>
@@ -523,19 +538,24 @@ function renderSearchResults(data, sort = selectedSearchOptions().sort) {
   \`;
 
   for (const item of data.results) {
+    const courtTitle = escapeHtml(item.Court_Name || "محكمة النقض");
+    const caseDateStr = item.Case_Date ? escapeHtml(item.Case_Date) : "";
     html += \`
       <article class="judgment-card" data-court-id="\${item.Court_ID || ''}">
-        <div class="badges-row">
-          <span class="law-badge badge-court">\${escapeHtml(item.Court_Name || "محكمة النقض")}</span>
-          <span class="law-badge badge-gold">طعن رقم \${escapeHtml(item.Case_No)}</span>
-          <span class="law-badge badge-blue">لسنة \${escapeHtml(item.Case_Year)} قضائية</span>
-          \${item.Case_Date ? \`<span class="law-badge badge-gray">\${escapeHtml(item.Case_Date)}</span>\` : ""}
-          \${item.Office_Year ? \`<span class="law-badge badge-gray">مكتب فني: \${escapeHtml(item.Office_Year)}</span>\` : ""}
+        <div class="card-top-meta">
+          <div class="card-court-badge">
+            <span>🏛️</span>
+            <span>\${courtTitle}</span>
+          </div>
+          <div class="card-date-meta">
+            \${caseDateStr ? \`<span>جلسة: <strong>\${caseDateStr}</strong></span>\` : ""}
+            \${item.Office_Year ? \`<span style="margin-right:10px; color:var(--gold-dark); font-weight:800;">(مكتب فني: \${escapeHtml(item.Office_Year)})</span>\` : ""}
+          </div>
         </div>
         
         <h3 class="card-title">
           <a href="/judgment/\${item.Master_ID}" onclick="navigateToJudgment(event, \${item.Master_ID})">
-            حكم \${escapeHtml(item.Court_Name)} في الطعن رقم \${escapeHtml(item.Case_No)} لسنة \${escapeHtml(item.Case_Year)} ق
+            الطعن رقم \${escapeHtml(item.Case_No)} لسنة \${escapeHtml(item.Case_Year)} قضائية
           </a>
         </h3>
     \`;
@@ -551,12 +571,21 @@ function renderSearchResults(data, sort = selectedSearchOptions().sort) {
 
     html += \`
         <div class="card-actions">
-          <a href="/judgment/\${item.Master_ID}" class="open-btn" onclick="navigateToJudgment(event, \${item.Master_ID})">
-            <span>فتح ملف الحكم كاملاً</span>
-            <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7"/></svg>
-          </a>
-          <button type="button" class="tool-btn" onclick="copySearchResultLink(\${item.Master_ID})">نسخ الرابط</button>
-          <button type="button" class="tool-btn" data-save-id="\${item.Master_ID}" onclick="toggleSaveFromCard(event, \${item.Master_ID}, '\${escapeHtml(item.Court_Name || 'محكمة النقض')}', \${item.Case_No}, \${item.Case_Year}, '\${escapeHtml(item.Case_Date || '')}')">☆ حفظ</button>
+          <div class="card-actions-group">
+            <a href="/judgment/\${item.Master_ID}" class="open-btn" onclick="navigateToJudgment(event, \${item.Master_ID})">
+              <span>فتح ملف الحكم كاملاً</span>
+              <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7"/></svg>
+            </a>
+            <button type="button" class="tool-btn" onclick="copyCitation('\${item.Master_ID}', '\${courtTitle}', '\${item.Case_No}', '\${item.Case_Year}', '\${caseDateStr}')">
+              <span>📋 نسخ السند</span>
+            </button>
+            <button type="button" class="tool-btn" onclick="copySearchResultLink(\${item.Master_ID})">
+              <span>🔗 نسخ الرابط</span>
+            </button>
+          </div>
+          <button type="button" class="tool-btn" data-save-id="\${item.Master_ID}" onclick="toggleSaveFromCard(event, \${item.Master_ID}, '\${courtTitle}', \${item.Case_No}, \${item.Case_Year}, '\${caseDateStr}')">
+            <span>☆ حفظ</span>
+          </button>
         </div>
       </article>
     \`;
@@ -735,6 +764,39 @@ async function loadJudgmentsByCourt(courtId = "", page = 1) {
 function copySearchResultLink(masterId) {
   copyToClipboard(new URL("/judgment/" + masterId, window.location.origin).href, "تم نسخ رابط الحكم");
 }
+
+function copyCitation(masterId, courtName, caseNo, caseYear, caseDate) {
+  const cDate = caseDate ? " - جلسة " + caseDate : "";
+  const citation = (courtName || "محكمة النقض") + " - الطعن رقم " + (caseNo || "") + " لسنة " + (caseYear || "") + " قضائية" + cDate + " (المكنز القضائي: " + window.location.origin + "/judgment/" + masterId + ")";
+  copyToClipboard(citation, "تم نسخ السند القانوني والاستشهاد");
+}
+
+function quickSearch(topic) {
+  const q = document.getElementById("query");
+  if (!q) return;
+  setMode("text");
+  q.value = topic;
+  lastSearchedQuery = topic;
+  executeTextSearch(1);
+  const card = document.querySelector(".search-card");
+  if (card) {
+    window.scrollTo({ top: card.offsetTop - 20, behavior: "smooth" });
+  }
+}
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "/" && !["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement?.tagName)) {
+    e.preventDefault();
+    const q = document.getElementById("query");
+    if (q) {
+      setMode("text");
+      q.focus();
+      q.select();
+    }
+  } else if (e.key === "Escape" && document.activeElement?.id === "query") {
+    document.activeElement.blur();
+  }
+});
 
 function getSavedJudgments() {
   try {
