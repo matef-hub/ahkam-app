@@ -19,7 +19,52 @@ import {
 } from "./ui/templates.js";
 import { getHomeStats, getJudgmentById, getCourtLandingData } from "./lib/db.js";
 
-const OFFICIAL_SVG_ICON = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 508 508"><circle cx="254" cy="254" r="254" fill="#84DBFF"/><path d="M80 438.8c45.6 42.8 106.8 69.2 174 69.2s128.4-26.4 174-69.2H80z" fill="#54C0EB"/><path d="M436.8 271.6h-64c-8.4 0-15.2-6.8-15.2-15.2V246h94.8v10c.8 8.8-6.4 15.6-14.8 15.6zM135.2 271.6h-64c-8.4 0-15.2-6.8-15.2-15.2V246h94.8v10c.8 8.8-6.4 15.6-14.8 15.6z" fill="#324A5E"/><path d="M282.4 401.6h-54.8c-8 0-14 6.4-14 14v4.4h83.2v-4.4c-.4-8-6.4-14.4-14.4-14.4z" fill="#2B3B4E"/><path d="M309.2 420H200.8c-10.4 0-18.8 8.4-18.8 18.8h145.6c0-10.4-8.4-18.8-18.4-18.8z" fill="#324A5E"/><circle cx="254.8" cy="183.6" r="22.4" fill="#E6E9EE"/></svg>`.trim();
+const OFFICIAL_SVG_ICON = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600" width="100%" height="100%">
+  <!-- Egyptian Judicial Encyclopedia Official Emblem -->
+  <defs>
+    <style>
+      .navy-fill { fill: #0B2545; }
+      .gold-fill { fill: #C49A45; }
+      .gold-stroke { stroke: #C49A45; stroke-width: 9; stroke-linecap: round; stroke-linejoin: round; }
+    </style>
+  </defs>
+
+  <!-- Central Column - Top Pediment Bars -->
+  <!-- Top Rounded Beam -->
+  <rect x="136" y="58" width="328" height="28" rx="14" class="navy-fill" />
+  
+  <!-- Second Stepped Architrave Bar -->
+  <rect x="165" y="98" width="270" height="22" rx="5" class="navy-fill" />
+
+  <!-- Twin Column Shafts (Classical Pillar) -->
+  <!-- Left Half -->
+  <path d="M 228 140 C 224 152 230 168 244 178 L 244 416 L 292 446 L 292 140 Z" class="navy-fill" />
+  
+  <!-- Right Half -->
+  <path d="M 372 140 C 376 152 370 168 356 178 L 356 416 L 308 446 L 308 140 Z" class="navy-fill" />
+
+  <!-- Left Scale of Justice (Gold) -->
+  <circle cx="132" cy="166" r="14" class="gold-fill" />
+  <line x1="132" y1="178" x2="54" y2="308" class="gold-stroke" />
+  <line x1="132" y1="178" x2="210" y2="308" class="gold-stroke" />
+  <path d="M 43 308 C 43 376 221 376 221 308 Z" class="gold-fill" />
+
+  <!-- Right Scale of Justice (Gold) -->
+  <circle cx="468" cy="166" r="14" class="gold-fill" />
+  <line x1="468" y1="178" x2="390" y2="308" class="gold-stroke" />
+  <line x1="468" y1="178" x2="546" y2="308" class="gold-stroke" />
+  <path d="M 379 308 C 379 376 557 376 557 308 Z" class="gold-fill" />
+
+  <!-- Open Law Book (Base Foundation) -->
+  <!-- Left Page (Navy) -->
+  <path d="M 292 496 C 210 418 116 414 45 470 L 74 532 C 144 484 222 490 292 546 Z" class="navy-fill" />
+
+  <!-- Right Page (Navy Top Arc) -->
+  <path d="M 308 496 C 390 418 484 414 555 470 L 555 496 C 484 446 390 452 308 528 Z" class="navy-fill" />
+
+  <!-- Right Page (Golden Bottom Arc Swoop) -->
+  <path d="M 308 536 C 390 458 484 454 555 510 L 555 522 C 484 474 390 480 308 548 Z" class="gold-fill" />
+</svg>`.trim();
 
 function errorResponse(body, status = 500) {
   return new Response(body, {
@@ -69,7 +114,30 @@ export default {
     }
 
     // Static assets & SEO (public)
-    if (url.pathname === "/favicon.ico" || url.pathname === "/favicon.svg") {
+    if (url.pathname === "/favicon.ico" || url.pathname === "/favicon.svg" || url.pathname === "/logo.svg") {
+      return finish(new Response(OFFICIAL_SVG_ICON, {
+        headers: {
+          ...SECURITY_HEADERS,
+          "Content-Type": "image/svg+xml; charset=utf-8",
+          "Cache-Control": "public, max-age=604800, immutable",
+        },
+      }));
+    }
+
+    if (url.pathname === "/logo.png") {
+      // If a custom PNG base64 is configured, decode and serve it; otherwise fallback to SVG
+      if (globalThis.CUSTOM_PNG_BASE64) {
+        const binStr = atob(globalThis.CUSTOM_PNG_BASE64);
+        const bytes = new Uint8Array(binStr.length);
+        for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
+        return finish(new Response(bytes, {
+          headers: {
+            ...SECURITY_HEADERS,
+            "Content-Type": "image/png",
+            "Cache-Control": "public, max-age=604800, immutable",
+          },
+        }));
+      }
       return finish(new Response(OFFICIAL_SVG_ICON, {
         headers: {
           ...SECURITY_HEADERS,
