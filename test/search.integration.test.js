@@ -108,3 +108,22 @@ test("court landing page data is retrieved accurately for valid judicial slugs",
   assert.equal(invalid, null);
   sqlite.close();
 });
+
+test("OR mode search with court filtering executes without syntax errors", async () => {
+  const sqlite = createFixture();
+  const db = d1Adapter(sqlite);
+  const result = await searchJudgments(db, {
+    query: "شيك بدون رصيد",
+    mode: "or",
+    scope: "principles",
+    sort: "newest",
+    page: 1,
+    pageSize: 20,
+    courtIds: [1, 29],
+  });
+  assert.ok(result);
+  assert.equal(result.page, 1);
+  assert.ok(result.total_judgments >= 1);
+  sqlite.close();
+});
+

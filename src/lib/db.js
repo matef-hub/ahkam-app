@@ -81,7 +81,7 @@ function buildSearchCte(ftsSpec, scope) {
         m.Case_No, m.Case_Year, m.Case_Date, m.Office_Year, m.Court_ID,
         ${dateSortExpression("m")} AS case_date_sort
       FROM by_judgment AS b JOIN Judgments_Master AS m ON m.Master_ID = b.Master_ID
-      WHERE b.matched_terms ${ftsSpec.mode === "or" ? ">= 1" : "="} ?
+      WHERE b.matched_terms >= ?
         AND NOT EXISTS (SELECT 1 FROM excluded_masters AS x WHERE x.Master_ID = b.Master_ID)`;
 }
 
