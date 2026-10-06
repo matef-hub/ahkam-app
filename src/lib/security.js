@@ -218,3 +218,10 @@ export function sanitizeReturnTo(raw) {
   return target;
 }
 
+export function getClientIp(request) {
+  if (!request || !request.headers) return "127.0.0.1";
+  return request.headers.get("CF-Connecting-IP") ||
+         request.headers.get("X-Forwarded-For")?.split(",")[0]?.trim() ||
+         "127.0.0.1";
+}
+

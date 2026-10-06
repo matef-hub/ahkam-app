@@ -4,6 +4,7 @@ import {
   validateIdParam,
   SECURITY_HEADERS,
   getCorsHeaders,
+  getClientIp,
 } from "../lib/security.js";
 import {
   getCourts,
@@ -49,12 +50,10 @@ const ENDPOINT_LIMITS = {
 };
 
 function checkInMemoryRateLimit(request, pathname = "/api/search") {
-  const ip = request.headers.get("CF-Connecting-IP") ||
-             request.headers.get("X-Forwarded-For")?.split(",")[0]?.trim() ||
-             "127.0.0.1";
+  const ip = getClientIp(request);
   const limit = ENDPOINT_LIMITS[pathname] || 80;
   const now = Date.now();
-  const bucketKey = `${ip}:${pathname}`;
+  const bucketKey = `${pathname}:${ip}`;
 
   let entry = ipBuckets.get(bucketKey);
   if (!entry || now - entry.resetTime > RATE_LIMIT_WINDOW_MS) {
@@ -76,7 +75,8 @@ function checkInMemoryRateLimit(request, pathname = "/api/search") {
 async function isRateLimited(request, env, pathname = "/api/search") {
   if (env && env.SEARCH_LIMITER) {
     try {
-      const key = request.headers.get("CF-Connecting-IP") || "unknown";
+      const ip = getClientIp(request);
+      const key = `${pathname}:${ip}`;
       const { success } = await env.SEARCH_LIMITER.limit({ key });
       return !success;
     } catch {

@@ -17,6 +17,27 @@ export async function saveUserJudgment(db, userId, { masterId, courtName = "", c
     throw new Error("معرف الحكم غير صالح");
   }
 
+  // Authoritative metadata lookup from Judgments_Master
+  const canonicalRow = await db
+    .prepare(`
+      SELECT m.Master_ID, m.Case_No, m.Case_Year, m.Case_Date, c.Court_Name
+      FROM Judgments_Master m
+      LEFT JOIN Courts c ON c.Court_ID = m.Court_ID
+      WHERE m.Master_ID = ?
+      LIMIT 1
+    `)
+    .bind(mId)
+    .first();
+
+  if (!canonicalRow) {
+    throw new Error("الحكم القضائي غير موجود");
+  }
+
+  const effectiveCourtName = canonicalRow.Court_Name || courtName || "";
+  const effectiveCaseNo = canonicalRow.Case_No != null ? String(canonicalRow.Case_No) : String(caseNo || "");
+  const effectiveCaseYear = canonicalRow.Case_Year != null ? String(canonicalRow.Case_Year) : String(caseYear || "");
+  const effectiveCaseDate = canonicalRow.Case_Date || caseDate || "";
+
   const nowIso = new Date().toISOString();
   await db
     .prepare(
@@ -29,7 +50,7 @@ export async function saveUserJudgment(db, userId, { masterId, courtName = "", c
          case_date = excluded.case_date,
          saved_at = excluded.saved_at`
     )
-    .bind(userId, mId, String(courtName || ""), String(caseNo || ""), String(caseYear || ""), String(caseDate || ""), nowIso)
+    .bind(userId, mId, String(effectiveCourtName), String(effectiveCaseNo), String(effectiveCaseYear), String(effectiveCaseDate), nowIso)
     .run();
 
   return { success: true, masterId: mId };

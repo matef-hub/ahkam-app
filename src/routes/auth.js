@@ -191,12 +191,23 @@ export async function handleUserSavedApi(request, env, url, user) {
   }
 
   if (request.method === "POST") {
+    const contentLength = Number(request.headers.get("content-length") || 0);
+    if (contentLength > 65536) {
+      return jsonResponse({ error: "حجم الطلب يتجاوز الحد الأقصى المسموح به (64KB)" }, 413);
+    }
+
     if (url.pathname === "/api/user/saved/sync") {
       let body;
       try {
         body = await request.json();
       } catch {
         return jsonResponse({ error: "بيانات JSON غير صالحة" }, 400);
+      }
+      if (!body || typeof body !== "object" || !Array.isArray(body.items)) {
+        return jsonResponse({ error: "قائمة العناصر المراد مزامنتها غير صالحة" }, 400);
+      }
+      if (body.items.length > 100) {
+        return jsonResponse({ error: "يتجاوز عدد العناصر الحد الأقصى للمزامنة دفعة واحدة (100 عنصر)" }, 400);
       }
       const res = await batchSyncSavedJudgments(env.DB, user.id, body.items || []);
       const saved = await getUserSavedJudgments(env.DB, user.id);
@@ -210,8 +221,17 @@ export async function handleUserSavedApi(request, env, url, user) {
       return jsonResponse({ error: "بيانات JSON غير صالحة" }, 400);
     }
 
+    if (!body || typeof body !== "object") {
+      return jsonResponse({ error: "بيانات غير صالحة" }, 400);
+    }
+
+    const mId = Number(body.masterId || body.id);
+    if (!Number.isSafeInteger(mId) || mId <= 0) {
+      return jsonResponse({ error: "معرف الحكم غير صالح" }, 400);
+    }
+
     try {
-      await saveUserJudgment(env.DB, user.id, body);
+      await saveUserJudgment(env.DB, user.id, { masterId: mId });
       const saved = await getUserSavedJudgments(env.DB, user.id);
       return jsonResponse({ success: true, saved });
     } catch (err) {

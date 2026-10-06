@@ -131,34 +131,35 @@ test("User cloud saved judgments CRUD operations", async () => {
     name: "باحث محفوظات",
   });
 
-  // Save judgment
+  // Save judgment with authoritative lookup from Judgments_Master (Master_ID 2 exists)
   await saveUserJudgment(db, user.id, {
-    masterId: 101,
-    courtName: "محكمة النقض",
-    caseNo: "1234",
-    caseYear: "88",
-    caseDate: "2020-05-10",
+    masterId: 2,
+    courtName: "اسم مزور", // Should be overwritten by canonical metadata
+    caseNo: "9999",
+    caseYear: "99",
   });
 
   let list = await getUserSavedJudgments(db, user.id);
   assert.equal(list.length, 1);
-  assert.equal(list[0].masterId, 101);
-  assert.equal(list[0].caseNo, "1234");
+  assert.equal(list[0].masterId, 2);
+  // Canonical metadata from DB
+  assert.equal(list[0].caseNo, "11");
+  assert.equal(list[0].caseYear, "50");
 
-  // Batch sync
+  // Batch sync with valid master IDs (1 and 4 exist)
   await batchSyncSavedJudgments(db, user.id, [
-    { masterId: 102, courtName: "الدستورية العليا", caseNo: "45", caseYear: "30" },
-    { masterId: 103, courtName: "مجلس الدولة", caseNo: "99", caseYear: "65" },
+    { masterId: 1 },
+    { masterId: 4 },
   ]);
 
   list = await getUserSavedJudgments(db, user.id);
   assert.equal(list.length, 3);
 
   // Remove judgment
-  await removeUserSavedJudgment(db, user.id, 101);
+  await removeUserSavedJudgment(db, user.id, 2);
   list = await getUserSavedJudgments(db, user.id);
   assert.equal(list.length, 2);
-  assert.ok(!list.some(i => i.masterId === 101));
+  assert.ok(!list.some(i => i.masterId === 2));
 });
 
 test("Gatekeeper Auth Wall: Unauthenticated request to / returns Gatekeeper login page", async () => {
@@ -566,6 +567,89 @@ test("Phase 4: Private APIs remain protected and reject anonymous requests with 
     assert.equal(data.error, "unauthorized");
   }
 });
+
+test("Phase 6: Saved Judgment API hardening, non-existent rejection, payload limits, and ownership isolation", async () => {
+  const userA = await upsertGoogleUser(db, {
+    googleId: "gid-p6-a-" + Date.now(),
+    email: "userA-" + Date.now() + "@example.com",
+    name: "مستخدم أ",
+  });
+  const sessionA = await createSession(db, userA.id, new Request("http://localhost:3000/"), { isTrial: false });
+
+  const userB = await upsertGoogleUser(db, {
+    googleId: "gid-p6-b-" + Date.now(),
+    email: "userB-" + Date.now() + "@example.com",
+    name: "مستخدم ب",
+  });
+  const sessionB = await createSession(db, userB.id, new Request("http://localhost:3000/"), { isTrial: false });
+
+  // 1. Reject non-existent master_id
+  const nonExistentReq = new Request("http://localhost:3000/api/user/saved", {
+    method: "POST",
+    headers: {
+      Cookie: `${SESSION_COOKIE_NAME}=${sessionA.token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ masterId: 9999999 }),
+  });
+  const nonExistentRes = await worker.fetch(nonExistentReq, { DB: db });
+  assert.equal(nonExistentRes.status, 400);
+  const nonExistentData = await nonExistentRes.json();
+  assert.ok(nonExistentData.error.includes("غير موجود"));
+
+  // 2. Authoritative metadata prevents fake court_name / case_no overwrite
+  const saveReq = new Request("http://localhost:3000/api/user/saved", {
+    method: "POST",
+    headers: {
+      Cookie: `${SESSION_COOKIE_NAME}=${sessionA.token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      masterId: 2,
+      courtName: "محكمة وهمية",
+      caseNo: "8888",
+    }),
+  });
+  const saveRes = await worker.fetch(saveReq, { DB: db });
+  assert.equal(saveRes.status, 200);
+  const saveData = await saveRes.json();
+  const savedItem = saveData.saved.find(s => s.masterId === 2);
+  assert.ok(savedItem);
+  assert.equal(savedItem.caseNo, "11", "Authoritative Case_No from Judgments_Master must be preserved");
+  assert.notEqual(savedItem.courtName, "محكمة وهمية", "Fake court name must not overwrite authoritative data");
+
+  // 3. Reject oversized sync payload (more than 100 items)
+  const oversizedItems = Array.from({ length: 105 }, (_, i) => ({ masterId: i + 1 }));
+  const oversizedReq = new Request("http://localhost:3000/api/user/saved/sync", {
+    method: "POST",
+    headers: {
+      Cookie: `${SESSION_COOKIE_NAME}=${sessionA.token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ items: oversizedItems }),
+  });
+  const oversizedRes = await worker.fetch(oversizedReq, { DB: db });
+  assert.equal(oversizedRes.status, 400);
+  const oversizedData = await oversizedRes.json();
+  assert.ok(oversizedData.error.includes("يتجاوز عدد العناصر"));
+
+  // 4. Ownership isolation: user B cannot delete user A's saved judgment
+  const deleteReqB = new Request("http://localhost:3000/api/user/saved?id=2", {
+    method: "DELETE",
+    headers: { Cookie: `${SESSION_COOKIE_NAME}=${sessionB.token}` },
+  });
+  const deleteResB = await worker.fetch(deleteReqB, { DB: db });
+  assert.equal(deleteResB.status, 200);
+
+  // Verify user A's item is still intact
+  const listReqA = new Request("http://localhost:3000/api/user/saved", {
+    headers: { Cookie: `${SESSION_COOKIE_NAME}=${sessionA.token}` },
+  });
+  const listResA = await worker.fetch(listReqA, { DB: db });
+  const listDataA = await listResA.json();
+  assert.ok(listDataA.saved.some(s => s.masterId === 2), "User A's saved judgment must remain untouched by User B");
+});
+
 
 
 
