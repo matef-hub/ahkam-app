@@ -52,11 +52,13 @@ export function createD1Adapter(sqlite) {
   };
 }
 
-export function initDatabase() {
-  if (d1AdapterInstance) return d1AdapterInstance;
+export function initDatabase(dbPath = DB_FILE) {
+  if (d1AdapterInstance && dbPath === DB_FILE) return d1AdapterInstance;
 
-  const sqlite = new DatabaseSync(DB_FILE);
-  sqliteInstance = sqlite;
+  const sqlite = new DatabaseSync(dbPath);
+  if (dbPath === DB_FILE) {
+    sqliteInstance = sqlite;
+  }
 
   // Base Schema
   sqlite.exec(`
@@ -95,7 +97,7 @@ export function initDatabase() {
     );
   `);
 
-  // Apply migrations 0001 to 0005
+  // Apply migrations 0001 to 0007
   const migrationsDir = path.join(ROOT_DIR, "migrations");
   const migrationFiles = [
     "0001_indexes.sql",
@@ -114,7 +116,7 @@ export function initDatabase() {
       try {
         sqlite.exec(sql);
       } catch (err) {
-        console.warn(`Migration ${file} notice:`, err.message);
+        throw new Error(`Migration failed for ${file}: ${err.message}`, { cause: err });
       }
     }
   }
@@ -146,8 +148,11 @@ export function initDatabase() {
     seedJudgments(sqlite);
   }
 
-  d1AdapterInstance = createD1Adapter(sqlite);
-  return d1AdapterInstance;
+  const adapter = createD1Adapter(sqlite);
+  if (dbPath === DB_FILE) {
+    d1AdapterInstance = adapter;
+  }
+  return adapter;
 }
 
 function seedJudgments(sqlite) {

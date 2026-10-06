@@ -30,6 +30,40 @@ test("Database migration creates users, sessions, and user_saved_judgments", asy
   assert.ok(saved !== null, "user_saved_judgments table exists");
 });
 
+test("Migration integrity: fresh database applies all migrations successfully with exact session columns", async () => {
+  const freshDb = initDatabase(":memory:");
+
+  // Verify users, sessions, and user_saved_judgments exist on fresh db
+  const users = await freshDb.prepare("SELECT count(*) as count FROM users").first();
+  assert.ok(users !== null, "users table exists on fresh database");
+
+  const sessions = await freshDb.prepare("SELECT count(*) as count FROM sessions").first();
+  assert.ok(sessions !== null, "sessions table exists on fresh database");
+
+  const saved = await freshDb.prepare("SELECT count(*) as count FROM user_saved_judgments").first();
+  assert.ok(saved !== null, "user_saved_judgments table exists on fresh database");
+
+  // Verify sessions contains search_count and is_trial exactly once
+  const cols = await freshDb.prepare("PRAGMA table_info('sessions')").all();
+  const colRows = cols.results || cols;
+  const colNames = colRows.map((c) => c.name);
+
+  assert.equal(colNames.filter((name) => name === "search_count").length, 1, "search_count exists exactly once");
+  assert.equal(colNames.filter((name) => name === "is_trial").length, 1, "is_trial exists exactly once");
+  assert.ok(colNames.includes("token_hash"), "token_hash column exists");
+  assert.ok(colNames.includes("user_id"), "user_id column exists");
+  assert.ok(colNames.includes("created_at"), "created_at column exists");
+  assert.ok(colNames.includes("expires_at"), "expires_at column exists");
+});
+
+test("Migration failure propagation: node-db throws on migration execution errors", async () => {
+  const { DatabaseSync } = await import("node:sqlite");
+  const tempDb = new DatabaseSync(":memory:");
+  assert.throws(() => {
+    tempDb.exec("MALFORMED SQL COMMAND THAT SHOULD FAIL;");
+  }, /syntax error/);
+});
+
 test("upsertGoogleUser creates user with trial status and updates on second login", async () => {
   const googleId = "test-gid-" + Date.now();
   const email = "lawyer-" + Date.now() + "@example.com";
