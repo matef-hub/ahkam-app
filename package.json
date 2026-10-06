@@ -7,8 +7,8 @@
     "dev": "node --experimental-sqlite server.js",
     "start": "node --experimental-sqlite server.js",
     "build": "node --check server.js && node --check src/index.js && node --experimental-sqlite --test",
-    "check": "node --check server.js && node --check src/index.js && node --check src/lib/*.js && node --check src/routes/*.js && node --check src/ui/*.js",
-    "lint": "node --check server.js && node --check src/index.js && node --check src/ui/*.js",
+    "check": "node scripts/check-syntax.mjs",
+    "lint": "node scripts/check-syntax.mjs",
     "test": "node --experimental-sqlite --test"
   }
 }
