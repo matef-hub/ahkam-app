@@ -1,4 +1,4 @@
-import { SECURITY_HEADERS, handleOptions, sanitizeReturnTo } from "./lib/security.js";
+import { SECURITY_HEADERS, handleOptions, sanitizeReturnTo, validateSearchQuery } from "./lib/security.js";
 import { handleApiSearch, handleApiJudgment, handleApiCourts, handleApiCourtJudgments } from "./routes/api.js";
 import { handleRobotsTxt, handleSitemap } from "./routes/seo.js";
 import {
@@ -10,7 +10,12 @@ import {
   handleUserSavedApi,
   handleUserMeApi,
 } from "./routes/auth.js";
-import { validateSession, incrementSessionSearchCount } from "./lib/auth.js";
+import {
+  validateSession,
+  incrementSessionSearchCount,
+  claimTrialSearchAtomic,
+  rollbackTrialSearch,
+} from "./lib/auth.js";
 import {
   renderHomePageHtml,
   renderJudgmentPageHtml,
@@ -156,8 +161,11 @@ export default {
     if (url.pathname === "/auth/google/login") {
       return finish(await handleGoogleLogin(request, env, url));
     }
-    if (url.pathname === "/auth/trial/login" || url.pathname === "/auth/dev/login") {
+    if (url.pathname === "/auth/trial/login") {
       return finish(await handleTrialLogin(request, env, url));
+    }
+    if (url.pathname === "/auth/dev/login") {
+      return finish(await handleDevLogin(request, env, url));
     }
     if (url.pathname === "/auth/google/callback") {
       return finish(await handleGoogleCallback(request, env, url));
@@ -257,6 +265,7 @@ export default {
     // Authenticated Search & Retrieval APIs
     if (url.pathname === "/api/search") {
       if (auth.session.isTrial) {
+        // Fast-path: check if trial was already marked as exhausted
         if (auth.session.searchCount >= 1) {
           return finish(new Response(JSON.stringify({
             error: "trial_expired",
@@ -271,7 +280,48 @@ export default {
             },
           }));
         }
-        await incrementSessionSearchCount(env.DB, auth.session.tokenHash);
+
+        // Validate query FIRST: failed validation must NOT consume the trial allowance!
+        const validation = validateSearchQuery(url);
+        if (!validation.valid) {
+          return finish(new Response(JSON.stringify({ error: validation.error }), {
+            status: 400,
+            headers: {
+              ...SECURITY_HEADERS,
+              "Content-Type": "application/json; charset=utf-8",
+              "Cache-Control": "no-store",
+            },
+          }));
+        }
+
+        // Atomically claim the single trial search allowance in D1 to prevent race conditions
+        const claimed = await claimTrialSearchAtomic(env.DB, auth.session.tokenHash);
+        if (!claimed) {
+          return finish(new Response(JSON.stringify({
+            error: "trial_expired",
+            message: "لقد استنفدت التجربة الفورية المتاحة (بحث واحد فقط). تفضل بتسجيل الدخول بحساب Google لمواصلة البحث غير المحدود وحفظ الأحكام.",
+            login_url: `/login?return_to=${encodeURIComponent(sanitizeReturnTo(url.pathname + url.search))}`,
+          }), {
+            status: 403,
+            headers: {
+              ...SECURITY_HEADERS,
+              "Content-Type": "application/json; charset=utf-8",
+              "Cache-Control": "no-store",
+            },
+          }));
+        }
+
+        // Execute search. If database execution fails with a 500 error, rollback the trial claim
+        try {
+          const searchResponse = await handleApiSearch(request, env, url, ctx);
+          if (!searchResponse.ok && searchResponse.status >= 500) {
+            await rollbackTrialSearch(env.DB, auth.session.tokenHash);
+          }
+          return finish(searchResponse);
+        } catch (err) {
+          await rollbackTrialSearch(env.DB, auth.session.tokenHash);
+          throw err;
+        }
       }
       return finish(await handleApiSearch(request, env, url, ctx));
     }

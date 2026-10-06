@@ -366,4 +366,118 @@ test("OAuth security integration: Authenticated user visiting /login with evil r
   assert.equal(validRes.headers.get("Location"), "http://localhost:3000/judgment/123");
 });
 
+test("Phase 3: Invalid search does NOT consume trial search allowance", async () => {
+  const trialUser = await upsertGoogleUser(db, {
+    googleId: "trial-invalid-test-" + Date.now(),
+    email: "trial-invalid-" + Date.now() + "@ahkam.app",
+    name: "زائر استكشافي",
+  });
+  const session = await createSession(db, trialUser.id, new Request("http://localhost:3000/"), { isTrial: true });
+
+  // 1. Invalid search: empty query or invalid page size
+  const invalidReq = new Request("http://localhost:3000/api/search?q=&page_size=999", {
+    headers: { Cookie: `${SESSION_COOKIE_NAME}=${session.token}` },
+  });
+  const invalidRes = await worker.fetch(invalidReq, { DB: db });
+  assert.equal(invalidRes.status, 400, "Invalid search should return 400");
+
+  // Verify server-side search_count is STILL 0
+  const row = await db.prepare("SELECT search_count FROM sessions WHERE token_hash = ?").bind(session.tokenHash).first();
+  assert.equal(Number(row.search_count), 0, "search_count must remain 0 after failed validation");
+
+  // 2. Now perform a valid search: it MUST succeed
+  const validReq = new Request("http://localhost:3000/api/search?q=شيك", {
+    headers: { Cookie: `${SESSION_COOKIE_NAME}=${session.token}` },
+  });
+  const validRes = await worker.fetch(validReq, { DB: db });
+  assert.equal(validRes.status, 200, "Valid search must succeed after previously invalid search");
+});
+
+test("Phase 3: Two concurrent trial searches do not both succeed (race condition prevented)", async () => {
+  const trialUser = await upsertGoogleUser(db, {
+    googleId: "trial-race-test-" + Date.now(),
+    email: "trial-race-" + Date.now() + "@ahkam.app",
+    name: "زائر متزامن",
+  });
+  const session = await createSession(db, trialUser.id, new Request("http://localhost:3000/"), { isTrial: true });
+
+  const req1 = new Request("http://localhost:3000/api/search?q=شيك", {
+    headers: { Cookie: `${SESSION_COOKIE_NAME}=${session.token}` },
+  });
+  const req2 = new Request("http://localhost:3000/api/search?q=بطلان", {
+    headers: { Cookie: `${SESSION_COOKIE_NAME}=${session.token}` },
+  });
+
+  // Launch both requests simultaneously
+  const [res1, res2] = await Promise.all([
+    worker.fetch(req1, { DB: db }),
+    worker.fetch(req2, { DB: db }),
+  ]);
+
+  const statuses = [res1.status, res2.status].sort();
+  assert.deepEqual(statuses, [200, 403], "Exactly one concurrent request must succeed (200) and the other must be blocked (403)");
+});
+
+test("Phase 3: Deleting the trial cookie does not reset server-side allowance", async () => {
+  const clientIp = "198.51.100." + (Math.floor(Math.random() * 200) + 10) + "." + (Date.now() % 1000);
+
+  // Step 1: Client gets trial session from /auth/trial/login
+  const loginReq = new Request("http://localhost:3000/auth/trial/login", {
+    headers: { "CF-Connecting-IP": clientIp },
+  });
+  const loginRes = await worker.fetch(loginReq, { DB: db });
+  assert.equal(loginRes.status, 302);
+  const cookies = loginRes.headers.getSetCookie ? loginRes.headers.getSetCookie() : [loginRes.headers.get("Set-Cookie")];
+  const tokenMatch = cookies.join(";").match(/ahkam_session=([^;]+)/);
+  assert.ok(tokenMatch, "Session token cookie issued");
+  const token = decodeURIComponent(tokenMatch[1]);
+
+  // Step 2: Client performs their 1 successful trial search
+  const searchReq = new Request("http://localhost:3000/api/search?q=عقد", {
+    headers: {
+      Cookie: `${SESSION_COOKIE_NAME}=${token}`,
+      "CF-Connecting-IP": clientIp,
+    },
+  });
+  const searchRes = await worker.fetch(searchReq, { DB: db });
+  assert.equal(searchRes.status, 200, "First trial search succeeds");
+
+  // Step 3: Client deletes all browser cookies and hits /auth/trial/login again
+  const deleteCookiesReq = new Request("http://localhost:3000/auth/trial/login", {
+    headers: {
+      // No cookies sent (deleted by client)
+      "CF-Connecting-IP": clientIp,
+    },
+  });
+  const retryLoginRes = await worker.fetch(deleteCookiesReq, { DB: db });
+  assert.equal(retryLoginRes.status, 302);
+  const loc = retryLoginRes.headers.get("Location");
+  assert.ok(loc.includes("/login"), "Must redirect to /login");
+  assert.ok(loc.includes("error="), "Must contain error informing user trial is exhausted");
+});
+
+test("Phase 3: Normal Google-authenticated users remain unlimited and unaffected", async () => {
+  const googleUser = await upsertGoogleUser(db, {
+    googleId: "unlimited-user-" + Date.now(),
+    email: "unlimited-" + Date.now() + "@example.com",
+    name: "مستشار دائم",
+  });
+  const session = await createSession(db, googleUser.id, new Request("http://localhost:3000/"), { isTrial: false });
+
+  for (let i = 1; i <= 3; i++) {
+    const req = new Request(`http://localhost:3000/api/search?q=شيك&page=${i}`, {
+      headers: { Cookie: `${SESSION_COOKIE_NAME}=${session.token}` },
+    });
+    const res = await worker.fetch(req, { DB: db });
+    assert.equal(res.status, 200, `Authenticated search #${i} must succeed`);
+  }
+});
+
+test("Phase 3: /auth/dev/login is hard-disabled in production and cannot bypass auth", async () => {
+  const prodReq = new Request("https://ahkam.app/auth/dev/login");
+  const prodRes = await worker.fetch(prodReq, { DB: db, ENVIRONMENT: "production" });
+  assert.equal(prodRes.status, 404, "Dev login on production host must return 404 Not Found");
+});
+
+
 

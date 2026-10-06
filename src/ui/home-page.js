@@ -696,6 +696,17 @@ function onQueryInput() {
   if (!input) return;
   const query = input.value.trim();
 
+  // For trial users: disable automatic debounced search completely!
+  // A visitor must only execute their single trial search via explicit button click,
+  // Enter key, or quick topic click, never accidentally by typing characters.
+  if (isTrialUser) {
+    if (!query) {
+      lastSearchedQuery = "";
+      cancelActiveRequest();
+    }
+    return;
+  }
+
   // If input was cleared by user
   if (!query) {
     lastSearchedQuery = "";

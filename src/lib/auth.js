@@ -117,6 +117,77 @@ export async function incrementSessionSearchCount(db, tokenHash) {
     .run();
 }
 
+/**
+ * Atomically attempts to claim the single trial search allowance.
+ * Returns true if the allowance was successfully claimed (transitions search_count 0 -> 1).
+ * Returns false if the allowance was already consumed (search_count >= 1).
+ * This eliminates the race condition where concurrent requests both pass search_count < 1.
+ */
+export async function claimTrialSearchAtomic(db, tokenHash) {
+  const res = await db
+    .prepare(
+      "UPDATE sessions SET search_count = search_count + 1 WHERE token_hash = ? AND search_count < 1"
+    )
+    .bind(tokenHash)
+    .run();
+  const changes = res?.meta?.changes ?? res?.changes ?? 0;
+  return changes > 0;
+}
+
+/**
+ * Reverts a claimed trial search in case the internal search execution failed with
+ * a 500 / database error, ensuring users are not penalized for server faults.
+ */
+export async function rollbackTrialSearch(db, tokenHash) {
+  try {
+    await db
+      .prepare(
+        "UPDATE sessions SET search_count = MAX(0, search_count - 1) WHERE token_hash = ?"
+      )
+      .bind(tokenHash)
+      .run();
+  } catch (err) {
+    console.warn("Rollback trial search error:", err.message);
+  }
+}
+
+/**
+ * Server-authoritative check: Verifies if a given IP address has already consumed a trial search.
+ */
+export async function hasExhaustedTrialByIp(db, ip) {
+  if (!ip || typeof ip !== "string") return false;
+  const cleanIp = ip.trim();
+  if (!cleanIp || cleanIp === "127.0.0.1" || cleanIp === "::1") return false;
+  const row = await db
+    .prepare(
+      "SELECT 1 FROM sessions WHERE is_trial = 1 AND search_count >= 1 AND ip_address = ? LIMIT 1"
+    )
+    .bind(cleanIp)
+    .first();
+  return Boolean(row);
+}
+
+/**
+ * Retrieves or creates a single shared anonymous trial user to prevent database clutter
+ * with disposable guest rows on every anonymous click.
+ */
+export async function getOrCreateAnonymousTrialUser(db) {
+  const existing = await db
+    .prepare("SELECT id FROM users WHERE google_id = 'anonymous-trial-user'")
+    .first();
+  if (existing) return existing.id;
+
+  const nowIso = new Date().toISOString();
+  const res = await db
+    .prepare(
+      `INSERT INTO users (google_id, email, name, picture_url, created_at, last_login_at, subscription_status, subscription_tier)
+       VALUES ('anonymous-trial-user', 'trial@ahkam.app', 'زائر (تجربة فورية)', '', ?, ?, 'trial', 'trial')`
+    )
+    .bind(nowIso, nowIso)
+    .run();
+  return res?.meta?.last_row_id ?? res?.lastInsertRowid ?? 1;
+}
+
 export async function destroySession(db, request) {
   const cookies = parseCookies(request);
   const token = cookies[SESSION_COOKIE_NAME];

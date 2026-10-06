@@ -4,11 +4,14 @@ import {
   createSessionCookie,
   clearSessionCookie,
   createSession,
+  validateSession,
   destroySession,
   parseCookies,
   buildGoogleAuthUrl,
   exchangeGoogleCode,
   upsertGoogleUser,
+  hasExhaustedTrialByIp,
+  getOrCreateAnonymousTrialUser,
   OAUTH_STATE_COOKIE_NAME,
 } from "../lib/auth.js";
 import {
@@ -67,6 +70,28 @@ export async function handleGoogleLogin(request, env, url) {
 export async function handleTrialLogin(request, env, url) {
   const returnTo = sanitizeReturnTo(url.searchParams.get("return_to"));
   const cookies = parseCookies(request);
+  const ip = request.headers.get("CF-Connecting-IP") ||
+             request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "";
+
+  // Server-authoritative check 1: Check existing session in request
+  const existingAuth = await validateSession(env.DB, request);
+  if (existingAuth && existingAuth.session.isTrial && existingAuth.session.searchCount >= 1) {
+    return redirectResponse(
+      `/login?error=${encodeURIComponent("عذراً، لقد استنفدت التجربة الفورية المتاحة (بحث واحد فقط). تفضل بتسجيل الدخول بحساب Google للاستمرار.")}&return_to=${encodeURIComponent(returnTo)}`,
+      ["ahkam_trial_used=1; Path=/; Max-Age=86400; SameSite=Lax"]
+    );
+  }
+
+  // Server-authoritative check 2: Check server-side record for this client IP
+  if (ip) {
+    const exhaustedByIp = await hasExhaustedTrialByIp(env.DB, ip);
+    if (exhaustedByIp) {
+      return redirectResponse(
+        `/login?error=${encodeURIComponent("عذراً، لقد تم استنفاد التجربة الفورية المتاحة (بحث واحد فقط) من هذا الجهاز. تفضل بتسجيل الدخول بحساب Google للاستمرار.")}&return_to=${encodeURIComponent(returnTo)}`,
+        ["ahkam_trial_used=1; Path=/; Max-Age=86400; SameSite=Lax"]
+      );
+    }
+  }
 
   if (cookies["ahkam_trial_used"] === "1") {
     return redirectResponse(
@@ -74,16 +99,9 @@ export async function handleTrialLogin(request, env, url) {
     );
   }
 
-  const guestRand = Math.random().toString(36).slice(2, 8);
-  const guestUser = {
-    googleId: "guest-trial-" + guestRand,
-    email: "guest-" + guestRand + "@ahkam.app",
-    name: "زائر (تجربة بحث واحدة)",
-    pictureUrl: "",
-  };
-
-  const user = await upsertGoogleUser(env.DB, guestUser);
-  const session = await createSession(env.DB, user.id, request, { isTrial: true });
+  // Use single shared anonymous trial user to prevent database clutter
+  const userId = await getOrCreateAnonymousTrialUser(env.DB);
+  const session = await createSession(env.DB, userId, request, { isTrial: true });
 
   const trialCookie = "ahkam_trial_used=1; Path=/; Max-Age=86400; SameSite=Lax";
   return redirectResponse(returnTo, [
@@ -93,6 +111,21 @@ export async function handleTrialLogin(request, env, url) {
 }
 
 export async function handleDevLogin(request, env, url) {
+  const isProduction = env?.ENVIRONMENT === "production" || url.hostname === "ahkam.app" || url.hostname.endsWith(".ahkam.app");
+  const isDev = !isProduction && Boolean(
+    env?.ENVIRONMENT === "development" ||
+    url.hostname === "localhost" ||
+    url.hostname === "127.0.0.1"
+  );
+  if (!isDev) {
+    return new Response(JSON.stringify({ error: "dev login is disabled in production" }), {
+      status: 404,
+      headers: {
+        ...SECURITY_HEADERS,
+        "Content-Type": "application/json; charset=utf-8",
+      },
+    });
+  }
   return handleTrialLogin(request, env, url);
 }
 
