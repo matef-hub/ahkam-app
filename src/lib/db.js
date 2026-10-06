@@ -69,12 +69,11 @@ function buildSearchCte(ftsSpec, scope) {
       SELECT h.Master_ID,
         COUNT(DISTINCT h.term_no) AS matched_terms,
         MIN(h.p_rank) AS best_rank,
-        COUNT(DISTINCT h.Fakra_ID) AS actual_match_count,
+        COUNT(DISTINCT COALESCE(h.Fakra_ID, -h.Master_ID)) AS actual_match_count,
         SUM(${phrasePredicate}) AS phrase_hits,
         SUM(CASE WHEN h.Fakra_No > 0 THEN 1 ELSE 0 END) AS principle_hits
       FROM hits AS h 
       GROUP BY h.Master_ID
-      LIMIT 1000
     ),
     ranked AS (
       SELECT b.Master_ID, b.matched_terms, b.best_rank, b.actual_match_count, b.phrase_hits, b.principle_hits,
@@ -114,6 +113,18 @@ function keysetPredicate(sort, cursor, binds) {
   return ` AND (${branches.join(" OR ")})`;
 }
 
+export function decodeSearchCursor(rawCursor, sort) {
+  if (!rawCursor) return null;
+  if (typeof rawCursor === "object" && Array.isArray(rawCursor.values)) return rawCursor;
+  if (typeof rawCursor !== "string") return null;
+  try {
+    const padded = rawCursor.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - rawCursor.length % 4) % 4);
+    const payload = JSON.parse(decodeURIComponent(escape(atob(padded))));
+    if (payload?.values && Array.isArray(payload.values)) return { values: payload.values };
+  } catch {}
+  return null;
+}
+
 export function encodeSearchCursor(row, sort) {
   const json = JSON.stringify({ v: SEARCH_CURSOR_VERSION, sort, values: cursorFields(row, sort) });
   return btoa(unescape(encodeURIComponent(json))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
@@ -139,14 +150,15 @@ export async function searchJudgments(db, options) {
   const closedCte = `${baseCte}${filterClauses.length ? ` AND ${filterClauses.join(" AND ")}` : ""}\n    )`;
   const countSql = `${closedCte} SELECT COUNT(*) AS total_judgments, COALESCE(SUM(actual_match_count), 0) AS total_matches FROM ranked`;
 
+  const activeCursor = decodeSearchCursor(cursor, sort);
   const cursorBinds = [];
-  const cursorSql = keysetPredicate(sort, cursor, cursorBinds);
+  const cursorSql = keysetPredicate(sort, activeCursor, cursorBinds);
   const pagedSql = `${closedCte}
     SELECT r.*, c.Court_Name FROM ranked AS r LEFT JOIN Courts AS c ON c.Court_ID = r.Court_ID
-    WHERE 1 = 1${cursorSql} ORDER BY ${orderBy(sort)} LIMIT ?${cursor ? "" : " OFFSET ?"}`;
-  const offset = cursor ? 0 : (page - 1) * pageSize;
+    WHERE 1 = 1${cursorSql} ORDER BY ${orderBy(sort)} LIMIT ?${activeCursor ? "" : " OFFSET ?"}`;
+  const offset = activeCursor ? 0 : (page - 1) * pageSize;
   const pagedBinds = [...searchBinds, ...filterBinds, ...cursorBinds, pageSize + 1];
-  if (!cursor) pagedBinds.push(offset);
+  if (!activeCursor) pagedBinds.push(offset);
 
   const [countResult, pagedResult] = await db.batch([
     db.prepare(countSql).bind(...searchBinds, ...filterBinds),

@@ -43,3 +43,40 @@ test("JSON-LD and query validation reject script and cursor injection", () => {
   const invalidCursor = validateSearchQuery(new URL("https://ahkam.app/api/search?q=شيك&cursor=' OR 1=1 --"));
   assert.equal(invalidCursor.valid, false);
 });
+
+test("Phase 5: Arabic normalization edge cases audit (Alef, Hamza, Maksura, Tatweel, Tashkeel, Digits, Prefixes)", () => {
+  // Alef forms all map to bare Alef
+  assert.equal(normalizeArabic("أحمد إبراهيم آمن ٱمرؤ"), "احمد ابراهيم امن امرء");
+
+  // Hamza forms (waw with hamza, nabra hamza) map to standalone hamza
+  assert.equal(normalizeArabic("مؤمن شئون بئر"), "مءمن شءون بءر");
+
+  // Alef Maksura maps to Yaa
+  assert.equal(normalizeArabic("مستشفى قضاء دعوى"), "مستشفي قضاء دعوي");
+
+  // Ta Marbuta and Ha must NOT collapse
+  assert.equal(normalizeArabic("قوة قوه"), "قوة قوه");
+  assert.equal(normalizeArabic("عدالة عداله"), "عدالة عداله");
+  assert.notEqual(normalizeArabic("محكمة"), normalizeArabic("محكمه"));
+
+  // Tatweel and all 9 Tashkeel marks are removed
+  assert.equal(normalizeArabic("شَـــــيْـــــكٌ مَـسْـؤُولِـيَّـةٌ"), "شيك مسءولية");
+  assert.equal(normalizeArabic("هٰـذَا"), "هذا");
+
+  // Arabic-Indic (٠-٩) and Persian (۰-۹) digits convert to ASCII (0-9)
+  assert.equal(normalizeArabic("المادة ٢٩ لسنة ١٩٧٧"), "المادة 29 لسنة 1977");
+  assert.equal(normalizeArabic("المادة ۲۹ لسنة ۱۹۷۷"), "المادة 29 لسنة 1977");
+
+  // Punctuation is stripped/replaced with space
+  assert.equal(normalizeArabic("عقد، باطل؛ هل يجوز؟ (نعم!)"), "عقد باطل هل يجوز نعم");
+});
+
+test("Phase 5: Arabic digits in numeric filters are correctly converted to ASCII numbers", () => {
+  const url = new URL("https://ahkam.app/api/search?q=شيك&case_no=٩٥&case_year=١٨&page=٣&page_size=١٠");
+  const parsed = validateSearchQuery(url);
+  assert.equal(parsed.valid, true);
+  assert.equal(parsed.caseNo, 95);
+  assert.equal(parsed.caseYear, 18);
+  assert.equal(parsed.page, 3);
+  assert.equal(parsed.pageSize, 10);
+});

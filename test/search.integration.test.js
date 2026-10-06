@@ -127,3 +127,106 @@ test("OR mode search with court filtering executes without syntax errors", async
   sqlite.close();
 });
 
+test("Phase 5: Master_Text-only hit returns found=true, match_count > 0, total_matches > 0 without double counting", async () => {
+  const sqlite = createFixture();
+  const db = d1Adapter(sqlite);
+  // "الثاني" only exists in Master_Text of judgment 2
+  const result = await searchJudgments(db, {
+    query: "الثاني",
+    mode: "normal",
+    scope: "full",
+  });
+  assert.equal(result.found, true);
+  assert.equal(result.total_judgments, 1);
+  assert.equal(result.total_matches, 1, "total_matches must count master-level hit");
+  assert.equal(result.results.length, 1);
+  assert.equal(result.results[0].Master_ID, 2);
+  assert.equal(result.results[0].match_count, 1, "match_count must be 1 for master-level hit");
+  assert.equal(result.results[0].matches.length, 1);
+  assert.equal(result.results[0].matches[0].Fakra_No, -100);
+  assert.equal(result.results[0].matches[0].fakraLabel, "ملخص الحكم والوقائع");
+  sqlite.close();
+});
+
+test("Phase 5: Broad search with more than 1000 candidate rows does not silently lose valid results", async () => {
+  const sqlite = new DatabaseSync(":memory:");
+  sqlite.exec(`
+    CREATE TABLE Courts (Court_ID INTEGER PRIMARY KEY, Court_Name TEXT);
+    CREATE TABLE Judgments_Master (Master_ID INTEGER PRIMARY KEY, Court_ID INTEGER, Case_No INTEGER, Case_Year INTEGER, Office_Year INTEGER, Case_Date TEXT, Master_Text TEXT);
+    CREATE TABLE Judgments_Text (Fakra_ID INTEGER PRIMARY KEY, Master_ID INTEGER, Fakra_No INTEGER, Fakra_Text TEXT);
+    CREATE TABLE Judgments_Principles (Mogz_ID INTEGER PRIMARY KEY, Parent_ID INTEGER, Court_ID INTEGER, Mogz_Text TEXT);
+    CREATE TABLE Judgments_Principles_Links (Mogz_ID INTEGER, Fakra_ID INTEGER);
+  `);
+  for (const m of ["0001_indexes.sql", "0002_search_indexes.sql", "0003_drop_duplicate_indexes.sql", "0004_normalized_judgment_fts.sql", "0005_search_metadata_and_integrity.sql"]) {
+    sqlite.exec(readFileSync(new URL(`../migrations/${m}`, import.meta.url), "utf8"));
+  }
+
+  sqlite.exec("BEGIN TRANSACTION;");
+  for (let i = 1; i <= 1050; i++) {
+    const courtId = i === 1050 ? 99 : 1;
+    sqlite.exec(`INSERT INTO Judgments_Master VALUES (${i}, ${courtId}, ${i}, 50, NULL, '2020-01-01', 'ملخص حكم قانوني شامل');`);
+    sqlite.exec(`INSERT INTO Judgments_Text VALUES (${i}, ${i}, 1, 'نص قاعدة قانونية عامة');`);
+  }
+  sqlite.exec("COMMIT;");
+
+  const db = d1Adapter(sqlite);
+  // 1. Broad search without filters must reflect all 1050 candidates without arbitrary LIMIT 1000 cutoff
+  const broadRes = await searchJudgments(db, { query: "قانونية", pageSize: 20 });
+  assert.equal(broadRes.found, true);
+  assert.equal(broadRes.total_judgments, 1050, "Total candidate count must not be capped at 1000");
+
+  // 2. Filter on courtId 99 (which only exists at row #1050): must NOT be lost due to candidate truncation
+  const filteredRes = await searchJudgments(db, { query: "قانونية", courtIds: [99] });
+  assert.equal(filteredRes.found, true);
+  assert.equal(filteredRes.total_judgments, 1);
+  assert.equal(filteredRes.results[0].Master_ID, 1050, "Candidate #1050 must not be discarded before filters");
+
+  sqlite.close();
+});
+
+test("Phase 5: Scope filtering correctly isolates principles vs reasons", async () => {
+  const sqlite = createFixture();
+  sqlite.exec("INSERT INTO Judgments_Master VALUES (30, 1, 30, 50, NULL, '2022-01-01', 'ملخص حكم دعوى الإيجار');");
+  sqlite.exec("INSERT INTO Judgments_Text VALUES (301, 30, 1, 'مبدأ استقرار المعاملات في الإيجار');"); // Fakra_No > 0 (principle)
+  sqlite.exec("INSERT INTO Judgments_Text VALUES (302, 30, -2, 'أسباب وحيثيات ثبوت الإيجار');");     // Fakra_No = -2 (reasons)
+  const db = d1Adapter(sqlite);
+
+  // Search in principles scope: only paragraph 301 should match
+  const princRes = await searchJudgments(db, { query: "الإيجار", scope: "principles" });
+  assert.equal(princRes.found, true);
+  assert.deepEqual(princRes.results.map(r => r.Master_ID), [30]);
+  assert.equal(princRes.results[0].matches.length, 1);
+  assert.equal(princRes.results[0].matches[0].Fakra_No, 1);
+
+  // Search in reasons scope: only paragraph 302 should match
+  const reasonRes = await searchJudgments(db, { query: "الإيجار", scope: "reasons" });
+  assert.equal(reasonRes.found, true);
+  assert.deepEqual(reasonRes.results.map(r => r.Master_ID), [30]);
+  assert.equal(reasonRes.results[0].matches.length, 1);
+  assert.equal(reasonRes.results[0].matches[0].Fakra_No, -2);
+
+  sqlite.close();
+});
+
+test("Phase 5: Cursor pagination preserves result order without duplicates", async () => {
+  const sqlite = createFixture();
+  const db = d1Adapter(sqlite);
+
+  // Search "الساحب" matching judgments 1 and 2 (or insert 3rd)
+  sqlite.exec("INSERT INTO Judgments_Master VALUES (3, 1, 13, 52, NULL, '2022-01-01', 'ملخص الحكم الثالث');");
+  sqlite.exec("INSERT INTO Judgments_Text VALUES (301, 3, 1, 'مسئولية الساحب المشددة');");
+
+  const page1 = await searchJudgments(db, { query: "الساحب", pageSize: 1, sort: "relevance" });
+  assert.equal(page1.found, true);
+  assert.equal(page1.results.length, 1);
+  assert.ok(page1.has_more, "Must have more results");
+  assert.ok(page1.next_cursor, "Must provide next_cursor");
+
+  const page2 = await searchJudgments(db, { query: "الساحب", pageSize: 1, sort: "relevance", cursor: page1.next_cursor });
+  assert.equal(page2.found, true);
+  assert.equal(page2.results.length, 1);
+  assert.notEqual(page2.results[0].Master_ID, page1.results[0].Master_ID, "Page 2 must not repeat Page 1 result");
+
+  sqlite.close();
+});
+
