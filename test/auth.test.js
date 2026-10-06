@@ -479,5 +479,93 @@ test("Phase 3: /auth/dev/login is hard-disabled in production and cannot bypass 
   assert.equal(prodRes.status, 404, "Dev login on production host must return 404 Not Found");
 });
 
+test("Phase 4: Anonymous GET /judgment/:id returns 200 with actual judgment content, correct title, and canonical URL", async () => {
+  const req = new Request("http://localhost:3000/judgment/2");
+  const res = await worker.fetch(req, { DB: db });
+  assert.equal(res.status, 200, "Anonymous request to judgment page must return 200 OK");
+  assert.ok(res.headers.get("content-type").includes("text/html"));
+  assert.equal(res.headers.get("x-content-type-options"), "nosniff");
+  assert.ok(res.headers.get("strict-transport-security"), "Security headers preserved");
+
+  const html = await res.text();
+  assert.ok(html.includes("الطعن رقم 11 لسنة 50 قضائية"), "Must contain judgment case details");
+  assert.ok(html.includes("بطلان إعلان صحيفة افتتاح الدعوى"), "Must contain judgment text/principle");
+  assert.ok(html.includes('<link rel="canonical" href="https://ahkam.app/judgment/2">'), "Must contain canonical URL");
+  assert.ok(html.includes("<title>حكم محكمة النقض"), "Title must identify the judgment");
+  assert.ok(!html.includes('class="login-card"'), "Must NOT render login card");
+  assert.ok(!html.includes('id="btnSaveFull"'), "Saved bookmark button must be hidden for anonymous crawler/visitor");
+});
+
+test("Phase 4: Authenticated user GET /judgment/:id includes user info and bookmark control", async () => {
+  const user = await upsertGoogleUser(db, {
+    googleId: "phase4-user-" + Date.now(),
+    email: "phase4-" + Date.now() + "@example.com",
+    name: "مستشار المرحلة الرابعة",
+  });
+  const session = await createSession(db, user.id, new Request("http://localhost:3000/"), { isTrial: false });
+
+  const req = new Request("http://localhost:3000/judgment/2", {
+    headers: { Cookie: `${SESSION_COOKIE_NAME}=${session.token}` },
+  });
+  const res = await worker.fetch(req, { DB: db });
+  assert.equal(res.status, 200);
+  const html = await res.text();
+  assert.ok(html.includes('id="btnSaveFull"'), "Saved button must be visible for authenticated user");
+  assert.ok(html.includes("مستشار المرحلة الرابعة"), "User name must be displayed in user pill");
+});
+
+test("Phase 4: Anonymous GET /courts/cassation-civil returns 200 and court content without requiring login", async () => {
+  const req = new Request("http://localhost:3000/courts/cassation-civil");
+  const res = await worker.fetch(req, { DB: db });
+  assert.equal(res.status, 200, "Anonymous request to court page must return 200 OK");
+  assert.ok(res.headers.get("content-type").includes("text/html"));
+  assert.equal(res.headers.get("x-content-type-options"), "nosniff");
+
+  const html = await res.text();
+  assert.ok(html.includes("محكمة النقض - الدائرة المدنية والتجارية"), "Must contain court name");
+  assert.ok(html.includes('<link rel="canonical" href="https://ahkam.app/courts/cassation-civil">'), "Must contain canonical URL");
+  assert.ok(!html.includes('class="login-card"'), "Must NOT render login card");
+});
+
+test("Phase 4: Anonymous GET /sitemap.xml and /robots.txt work without authentication", async () => {
+  const sitemapReq = new Request("http://localhost:3000/sitemap.xml");
+  const sitemapRes = await worker.fetch(sitemapReq, { DB: db });
+  assert.equal(sitemapRes.status, 200);
+  assert.ok(sitemapRes.headers.get("content-type").includes("application/xml"));
+  const xml = await sitemapRes.text();
+  assert.ok(xml.includes("https://ahkam.app/judgment/2"), "Sitemap must publish judgment URLs");
+  assert.ok(xml.includes("https://ahkam.app/courts/cassation-civil"), "Sitemap must publish court URLs");
+
+  const robotsReq = new Request("http://localhost:3000/robots.txt");
+  const robotsRes = await worker.fetch(robotsReq, { DB: db });
+  assert.equal(robotsRes.status, 200);
+  const robots = await robotsRes.text();
+  assert.ok(robots.includes("Allow: /"));
+  assert.ok(robots.includes("Disallow: /api/"));
+  assert.ok(robots.includes("Sitemap: https://ahkam.app/sitemap.xml"));
+});
+
+test("Phase 4: Private APIs remain protected and reject anonymous requests with 401", async () => {
+  const endpoints = [
+    { method: "GET", path: "/api/search?q=شيك" },
+    { method: "GET", path: "/api/user/saved" },
+    { method: "POST", path: "/api/user/saved", body: JSON.stringify({ masterId: 2 }) },
+    { method: "GET", path: "/api/judgment?id=2" },
+    { method: "GET", path: "/api/court-judgments?court_id=1" },
+  ];
+
+  for (const ep of endpoints) {
+    const req = new Request(`http://localhost:3000${ep.path}`, {
+      method: ep.method,
+      headers: ep.body ? { "Content-Type": "application/json" } : {},
+      body: ep.body || undefined,
+    });
+    const res = await worker.fetch(req, { DB: db });
+    assert.equal(res.status, 401, `Anonymous request to ${ep.method} ${ep.path} must return 401 Unauthorized`);
+    const data = await res.json();
+    assert.equal(data.error, "unauthorized");
+  }
+});
+
 
 

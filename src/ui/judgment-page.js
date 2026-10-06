@@ -60,7 +60,7 @@ ${FONT_LINKS}
 ${renderTopDevBar()}
 
 <div class="container">
-  ${renderHeader({ badgeId: "detailSavedBadge", isHome: false, showSaved: true, user })}
+  ${renderHeader({ badgeId: "detailSavedBadge", isHome: false, showSaved: Boolean(user), user })}
 
   <main>
     <a href="/" class="back-btn">
@@ -80,7 +80,7 @@ ${renderTopDevBar()}
         <div class="judgment-toolbar">
           <button class="tool-btn" onclick="copyJudgmentCitation()">📋 نسخ الاستشهاد القانوني</button>
           <button class="tool-btn" onclick="copyJudgmentLink()">🔗 نسخ الرابط</button>
-          <button class="tool-btn" id="btnSaveFull" onclick="toggleSaveFullJudgment()">☆ حفظ في المفضلة</button>
+          ${user ? `<button class="tool-btn" id="btnSaveFull" onclick="toggleSaveFullJudgment()">☆ حفظ في المفضلة</button>` : ""}
           <button class="tool-btn" onclick="window.print()">🖨️ طباعة الحكم</button>
         </div>
 
@@ -147,6 +147,7 @@ ${renderTopDevBar()}
 ${renderSiteFooter()}
 
 <script>
+const isUserLoggedIn = ${Boolean(user)};
 const judgmentData = ${safeJsonForHtml({
   Master_ID: master.Master_ID,
   Case_No: master.Case_No,
@@ -210,6 +211,10 @@ function updateDetailSavedBadge() {
 }
 
 function toggleSaveFullJudgment() {
+  if (!isUserLoggedIn) {
+    showToast("يرجى تسجيل الدخول بحساب Google لحفظ الأحكام في المفضلة");
+    return;
+  }
   const m = judgmentData;
   const idNum = Number(m.Master_ID);
   if (!idNum) return;

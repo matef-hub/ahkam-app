@@ -161,7 +161,7 @@ ${FONT_LINKS}
 ${renderTopDevBar()}
 
 <div class="container">
-  ${renderHeader({ badgeId: "courtSavedBadge", isHome: false, showSaved: true, user })}
+  ${renderHeader({ badgeId: "courtSavedBadge", isHome: false, showSaved: Boolean(user), user })}
 
   <nav class="back-btn-row" style="margin-bottom: 16px;">
     <a href="/" class="back-btn">

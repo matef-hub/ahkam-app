@@ -202,7 +202,63 @@ export default {
       }));
     }
 
-    // Gatekeeper: Website does NOT open without login!
+    // Public Document: Judgment Full Detail View (SEO Indexable)
+    const judgmentMatch = url.pathname.match(/^\/judgment\/(\d+)$/);
+    if (judgmentMatch) {
+      const masterId = Number(judgmentMatch[1]);
+      if (!Number.isSafeInteger(masterId) || masterId <= 0) {
+        return finish(errorResponse("معرف الحكم غير صالح", 400));
+      }
+
+      try {
+        const data = await getJudgmentById(env.DB, masterId);
+        if (!data.found) return finish(errorResponse("الحكم القضائي غير موجود", 404));
+
+        const html = renderJudgmentPageHtml(data, auth?.user || null);
+        const cacheControl = auth?.user
+          ? "private, no-cache, no-store, must-revalidate"
+          : "public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800";
+        return finish(new Response(html, {
+          status: 200,
+          headers: {
+            ...SECURITY_HEADERS,
+            "Content-Type": "text/html; charset=utf-8",
+            "Cache-Control": cacheControl,
+          },
+        }));
+      } catch (err) {
+        console.error("SSR Judgment Render Failure:", err);
+        return finish(errorResponse("حدث خطأ أثناء عرض الحكم", 500));
+      }
+    }
+
+    // Public Document: Court Landing View (SEO Indexable)
+    const courtMatch = url.pathname.match(/^\/courts\/([a-z-]+)$/);
+    if (courtMatch) {
+      const slug = courtMatch[1];
+      try {
+        const data = await getCourtLandingData(env.DB, slug);
+        if (!data) return finish(errorResponse("صفحة المحكمة غير موجودة", 404));
+
+        const html = renderCourtLandingPageHtml(data, auth?.user || null);
+        const cacheControl = auth?.user
+          ? "private, no-cache, no-store, must-revalidate"
+          : "public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800";
+        return finish(new Response(html, {
+          status: 200,
+          headers: {
+            ...SECURITY_HEADERS,
+            "Content-Type": "text/html; charset=utf-8",
+            "Cache-Control": cacheControl,
+          },
+        }));
+      } catch (err) {
+        console.error("SSR Court Landing Failure:", err);
+        return finish(errorResponse("حدث خطأ أثناء عرض صفحة المحكمة", 500));
+      }
+    }
+
+    // Gatekeeper: Website search workspace and APIs require authentication!
     if (!auth) {
       if (url.pathname.startsWith("/api/")) {
         return finish(new Response(JSON.stringify({
@@ -337,56 +393,6 @@ export default {
 
     if (url.pathname === "/saved" || url.pathname === "/bookmarks") {
       return finish(Response.redirect(new URL("/?tab=saved", request.url).href, 302));
-    }
-
-    // Judgment Full Detail View
-    const judgmentMatch = url.pathname.match(/^\/judgment\/(\d+)$/);
-    if (judgmentMatch) {
-      const masterId = Number(judgmentMatch[1]);
-      if (!Number.isSafeInteger(masterId) || masterId <= 0) {
-        return finish(errorResponse("معرف الحكم غير صالح", 400));
-      }
-
-      try {
-        const data = await getJudgmentById(env.DB, masterId);
-        if (!data.found) return finish(errorResponse("الحكم القضائي غير موجود", 404));
-
-        const html = renderJudgmentPageHtml(data, auth.user);
-        return finish(new Response(html, {
-          status: 200,
-          headers: {
-            ...SECURITY_HEADERS,
-            "Content-Type": "text/html; charset=utf-8",
-            "Cache-Control": "no-cache, no-store, must-revalidate",
-          },
-        }));
-      } catch (err) {
-        console.error("SSR Judgment Render Failure:", err);
-        return finish(errorResponse("حدث خطأ أثناء عرض الحكم", 500));
-      }
-    }
-
-    // Court Landing View
-    const courtMatch = url.pathname.match(/^\/courts\/([a-z-]+)$/);
-    if (courtMatch) {
-      const slug = courtMatch[1];
-      try {
-        const data = await getCourtLandingData(env.DB, slug);
-        if (!data) return finish(errorResponse("صفحة المحكمة غير موجودة", 404));
-
-        const html = renderCourtLandingPageHtml(data, auth.user);
-        return finish(new Response(html, {
-          status: 200,
-          headers: {
-            ...SECURITY_HEADERS,
-            "Content-Type": "text/html; charset=utf-8",
-            "Cache-Control": "no-cache, no-store, must-revalidate",
-          },
-        }));
-      } catch (err) {
-        console.error("SSR Court Landing Failure:", err);
-        return finish(errorResponse("حدث خطأ أثناء عرض صفحة المحكمة", 500));
-      }
     }
 
     // Homepage Search Workspace
