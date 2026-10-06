@@ -3,7 +3,8 @@ import { readFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 
-import { searchJudgments, getCourtLandingData, COURT_SLUGS } from "../src/lib/db.js";
+import { searchJudgments, getJudgmentById, getCourtLandingData, COURT_SLUGS } from "../src/lib/db.js";
+import { renderJudgmentPageHtml } from "../src/ui/judgment-page.js";
 
 function d1Adapter(sqlite) {
   return {
@@ -229,4 +230,49 @@ test("Phase 5: Cursor pagination preserves result order without duplicates", asy
 
   sqlite.close();
 });
+
+test("Phase 7: Fallback to same court latest judgments uses honest wording without claiming legal relation", async () => {
+  const sqlite = createFixture();
+  const db = d1Adapter(sqlite);
+
+  // Judgment 1 has no records in Judgment_Relations
+  const data = await getJudgmentById(db, 1);
+  assert.equal(data.found, true);
+  assert.equal(data.relation_mode, "court_peer_latest");
+  assert.equal(data.related.length, 1);
+  assert.equal(data.related[0].Master_ID, 2);
+
+  // Render HTML
+  const html = renderJudgmentPageHtml(data);
+  assert.ok(html.includes("أحدث أحكام من المحكمة نفسها"), "Must use honest fallback heading");
+  assert.ok(!html.includes("أحكام ذات صلة"), "Must NOT claim arbitrary judgments are related");
+  assert.ok(!html.includes("أحكام وسوابق ذات صلة موثقة"), "Must NOT claim relations are verified when none exist");
+
+  sqlite.close();
+});
+
+test("Phase 7: Explicit Judgment_Relations are correctly queried, preferred, and labeled with legal relation type", async () => {
+  const sqlite = createFixture();
+  // Insert third judgment in different court and an explicit relation
+  sqlite.exec("INSERT INTO Courts VALUES (2, 'مجلس الدولة')");
+  sqlite.exec("INSERT INTO Judgments_Master VALUES (3, 2, 99, 60, NULL, '2023-01-01', 'ملخص حكم مجلس الدولة')");
+  sqlite.exec("INSERT INTO Judgment_Relations (From_Master_ID, To_Master_ID, Relation_Type, Relation_Source, Weight) VALUES (1, 3, 'cites', 'editorial', 2.5)");
+
+  const db = d1Adapter(sqlite);
+  const data = await getJudgmentById(db, 1);
+  assert.equal(data.found, true);
+  assert.equal(data.relation_mode, "verified_relation");
+  assert.equal(data.related.length, 1);
+  assert.equal(data.related[0].Master_ID, 3);
+  assert.equal(data.related[0].Relation_Type, "cites");
+
+  // Render HTML
+  const html = renderJudgmentPageHtml(data);
+  assert.ok(html.includes("أحكام وسوابق ذات صلة موثقة"), "Must render verified relation heading");
+  assert.ok(html.includes("يستشهد به"), "Must render explicit relation type label");
+  assert.ok(!html.includes("أحدث أحكام من المحكمة نفسها"), "Must not show fallback heading when verified relations exist");
+
+  sqlite.close();
+});
+
 

@@ -224,15 +224,35 @@ export async function getJudgmentById(db, masterId) {
   const principlesStmt = db.prepare(`SELECT DISTINCT p.Mogz_ID, p.Mogz_Text FROM Judgments_Principles AS p
     JOIN Judgments_Principles_Links AS l ON l.Mogz_ID = p.Mogz_ID JOIN Judgments_Text AS t ON t.Fakra_ID = l.Fakra_ID
     WHERE t.Master_ID = ? ORDER BY p.Mogz_ID ASC`).bind(masterId);
-  const relatedStmt = db.prepare(`SELECT peer.Master_ID, peer.Case_No, peer.Case_Year, peer.Case_Date, c.Court_Name
+  // Option A: Check verified explicit relations first
+  const explicitRelationsStmt = db.prepare(`SELECT peer.Master_ID, peer.Case_No, peer.Case_Year, peer.Case_Date, c.Court_Name,
+    rel.Relation_Type, rel.Relation_Source, rel.Weight
+    FROM Judgment_Relations AS rel
+    JOIN Judgments_Master AS peer ON peer.Master_ID = rel.To_Master_ID
+    LEFT JOIN Courts AS c ON c.Court_ID = peer.Court_ID
+    WHERE rel.From_Master_ID = ?
+    ORDER BY rel.Weight DESC, ${dateSortExpression("peer")} DESC, peer.Master_ID DESC LIMIT 5`).bind(masterId);
+  // Option B: Fallback peer judgments from the exact same court
+  const peerCourtStmt = db.prepare(`SELECT peer.Master_ID, peer.Case_No, peer.Case_Year, peer.Case_Date, c.Court_Name
     FROM Judgments_Master AS current JOIN Judgments_Master AS peer ON peer.Court_ID = current.Court_ID AND peer.Master_ID <> current.Master_ID
     LEFT JOIN Courts AS c ON c.Court_ID = peer.Court_ID WHERE current.Master_ID = ?
     ORDER BY ${dateSortExpression("peer")} DESC, peer.Master_ID DESC LIMIT 5`).bind(masterId);
-  const batch = await db.batch([masterStmt, textsStmt, principlesStmt, relatedStmt]);
+
+  const batch = await db.batch([masterStmt, textsStmt, principlesStmt, explicitRelationsStmt, peerCourtStmt]);
   const master = batch[0]?.results?.[0] || null;
   if (!master) return { found: false };
+
+  const explicitRelations = batch[3]?.results || [];
+  const peerJudgments = batch[4]?.results || [];
+  const hasExplicit = explicitRelations.length > 0;
+
   return {
-    found: true, master, texts: batch[1]?.results || [], principles: batch[2]?.results || [], related: batch[3]?.results || []
+    found: true,
+    master,
+    texts: batch[1]?.results || [],
+    principles: batch[2]?.results || [],
+    related: hasExplicit ? explicitRelations : peerJudgments,
+    relation_mode: hasExplicit ? "verified_relation" : "court_peer_latest",
   };
 }
 

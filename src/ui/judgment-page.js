@@ -133,13 +133,29 @@ ${renderTopDevBar()}
         </section>`;
       }).join("")}
 
-      ${data.related && data.related.length ? `
+      ${data.related && data.related.length ? (() => {
+        const isVerified = data.relation_mode === "verified_relation" || data.related.some(r => Boolean(r.Relation_Type));
+        const headingText = isVerified ? "أحكام وسوابق ذات صلة موثقة" : "أحدث أحكام من المحكمة نفسها";
+        const relationLabels = {
+          same_case: "الطعن ذاته / مرتبط",
+          same_principle: "المبدأ القانوني ذاته",
+          cites: "يستشهد به",
+          cited_by: "مستشهد به في هذا الحكم",
+          editorial: "صلة قانونية وثيقة",
+        };
+
+        return `
       <section aria-labelledby="related-judgments-heading">
-        <h2 id="related-judgments-heading" style="color:var(--primary); font-size:1.25rem; margin:28px 0 12px;">أحكام ذات صلة من المحكمة نفسها</h2>
+        <h2 id="related-judgments-heading" style="color:var(--primary); font-size:1.25rem; margin:28px 0 12px;">${escapeHtml(headingText)}</h2>
         <div class="principles-wrapper">
-          ${data.related.map(item => `<a class="principle-box" href="/judgment/${escapeHtml(item.Master_ID)}">${escapeHtml(item.Court_Name || "المحكمة")} — الطعن رقم ${escapeHtml(item.Case_No)} لسنة ${escapeHtml(item.Case_Year)}${item.Case_Date ? ` — ${escapeHtml(item.Case_Date)}` : ""}</a>`).join("")}
+          ${data.related.map(item => {
+            const relType = item.Relation_Type ? relationLabels[item.Relation_Type] || item.Relation_Type : null;
+            const badgeHtml = relType ? `<span class="law-badge badge-gold" style="margin-inline-end:8px; font-size:0.75rem;">${escapeHtml(relType)}</span>` : "";
+            return `<a class="principle-box" href="/judgment/${escapeHtml(item.Master_ID)}">${badgeHtml}${escapeHtml(item.Court_Name || "المحكمة")} — الطعن رقم ${escapeHtml(item.Case_No)} لسنة ${escapeHtml(item.Case_Year)}${item.Case_Date ? ` — ${escapeHtml(item.Case_Date)}` : ""}</a>`;
+          }).join("")}
         </div>
-      </section>` : ""}
+      </section>`;
+      })() : ""}
     </article>
   </main>
 </div>

@@ -1177,10 +1177,22 @@ function renderFullJudgmentView(data) {
   }
 
   if (data.related && data.related.length) {
-    html += '<section aria-labelledby="related-judgments-heading"><h2 id="related-judgments-heading" style="color:var(--primary); font-size:1.2rem; margin:28px 0 12px;">أحكام ذات صلة من المحكمة نفسها</h2><div class="principles-wrapper">';
+    const isVerified = data.relation_mode === "verified_relation" || data.related.some(r => Boolean(r.Relation_Type));
+    const headingText = isVerified ? "أحكام وسوابق ذات صلة موثقة" : "أحدث أحكام من المحكمة نفسها";
+    const relationLabels = {
+      same_case: "الطعن ذاته / مرتبط",
+      same_principle: "المبدأ القانوني ذاته",
+      cites: "يستشهد به",
+      cited_by: "مستشهد به في هذا الحكم",
+      editorial: "صلة قانونية وثيقة",
+    };
+
+    html += '<section aria-labelledby="related-judgments-heading"><h2 id="related-judgments-heading" style="color:var(--primary); font-size:1.2rem; margin:28px 0 12px;">' + escapeHtml(headingText) + '</h2><div class="principles-wrapper">';
     for (const item of data.related) {
+      const relLabel = item.Relation_Type ? relationLabels[item.Relation_Type] || item.Relation_Type : null;
+      const badgeHtml = relLabel ? '<span class="law-badge badge-gold" style="margin-inline-end:8px; font-size:0.75rem;">' + escapeHtml(relLabel) + '</span>' : '';
       html += '<a class="principle-box" href="/judgment/' + encodeURIComponent(item.Master_ID) + '" onclick="navigateToJudgment(event, ' + Number(item.Master_ID) + ')">' +
-        escapeHtml(item.Court_Name || "المحكمة") + ' — الطعن رقم ' + escapeHtml(item.Case_No) + ' لسنة ' + escapeHtml(item.Case_Year) +
+        badgeHtml + escapeHtml(item.Court_Name || "المحكمة") + ' — الطعن رقم ' + escapeHtml(item.Case_No) + ' لسنة ' + escapeHtml(item.Case_Year) +
         (item.Case_Date ? ' — ' + escapeHtml(item.Case_Date) : '') + '</a>';
     }
     html += "</div></section>";
