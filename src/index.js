@@ -1,4 +1,4 @@
-import { SECURITY_HEADERS, handleOptions } from "./lib/security.js";
+import { SECURITY_HEADERS, handleOptions, sanitizeReturnTo } from "./lib/security.js";
 import { handleApiSearch, handleApiJudgment, handleApiCourts, handleApiCourtJudgments } from "./routes/api.js";
 import { handleRobotsTxt, handleSitemap } from "./routes/seo.js";
 import {
@@ -178,11 +178,11 @@ export default {
     if (url.pathname === "/login") {
       // Only redirect away if the user is a REAL authenticated user (not a temporary trial user)
       if (auth && !auth.session.isTrial && !url.searchParams.has("force")) {
-        const returnTo = url.searchParams.get("return_to") || "/";
+        const returnTo = sanitizeReturnTo(url.searchParams.get("return_to"));
         return finish(Response.redirect(new URL(returnTo, request.url).href, 302));
       }
       return finish(new Response(renderLoginPageHtml({
-        returnTo: url.searchParams.get("return_to") || "/",
+        returnTo: sanitizeReturnTo(url.searchParams.get("return_to")),
         error: url.searchParams.get("error") || "",
       }), {
         status: 200,
@@ -200,7 +200,7 @@ export default {
         return finish(new Response(JSON.stringify({
           error: "unauthorized",
           message: "يجب تسجيل الدخول بحساب Google للوصول إلى قاعدة الأحكام والمحفوظات",
-          login_url: `/login?return_to=${encodeURIComponent(url.pathname + url.search)}`,
+          login_url: `/login?return_to=${encodeURIComponent(sanitizeReturnTo(url.pathname + url.search))}`,
         }), {
           status: 401,
           headers: {
@@ -213,7 +213,7 @@ export default {
 
       // Render the gatekeeper login wall immediately
       return finish(new Response(renderLoginPageHtml({
-        returnTo: url.pathname + url.search,
+        returnTo: sanitizeReturnTo(url.pathname + url.search),
       }), {
         status: 200,
         headers: {
@@ -230,7 +230,7 @@ export default {
         return finish(new Response(JSON.stringify({
           error: "trial_expired",
           message: "لقد استنفدت التجربة الفورية المتاحة (بحث واحد فقط). تفضل بتسجيل الدخول بحساب Google للاستمرار بدون قيود.",
-          login_url: `/login?return_to=${encodeURIComponent(url.pathname + url.search)}`,
+          login_url: `/login?return_to=${encodeURIComponent(sanitizeReturnTo(url.pathname + url.search))}`,
         }), {
           status: 403,
           headers: {
@@ -242,7 +242,7 @@ export default {
       }
 
       // For page requests (such as refreshing / or opening another page), redirect directly to /login
-      const loginUrlWithMsg = `/login?error=${encodeURIComponent("لقد استنفدت التجربة الفورية المتاحة (بحث واحد فقط). تفضل بتسجيل الدخول بحساب Google للاستمرار.")}&return_to=${encodeURIComponent(url.pathname + url.search)}`;
+      const loginUrlWithMsg = `/login?error=${encodeURIComponent("لقد استنفدت التجربة الفورية المتاحة (بحث واحد فقط). تفضل بتسجيل الدخول بحساب Google للاستمرار.")}&return_to=${encodeURIComponent(sanitizeReturnTo(url.pathname + url.search))}`;
       return finish(Response.redirect(new URL(loginUrlWithMsg, request.url).href, 302));
     }
 
@@ -261,7 +261,7 @@ export default {
           return finish(new Response(JSON.stringify({
             error: "trial_expired",
             message: "لقد استنفدت التجربة الفورية المتاحة (بحث واحد فقط). تفضل بتسجيل الدخول بحساب Google لمواصلة البحث غير المحدود وحفظ الأحكام.",
-            login_url: `/login?return_to=${encodeURIComponent(url.pathname + url.search)}`,
+            login_url: `/login?return_to=${encodeURIComponent(sanitizeReturnTo(url.pathname + url.search))}`,
           }), {
             status: 403,
             headers: {

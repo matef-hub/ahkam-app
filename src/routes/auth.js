@@ -17,7 +17,7 @@ import {
   removeUserSavedJudgment,
   batchSyncSavedJudgments,
 } from "../lib/user-saved.js";
-import { SECURITY_HEADERS } from "../lib/security.js";
+import { SECURITY_HEADERS, sanitizeReturnTo } from "../lib/security.js";
 
 function jsonResponse(data, status = 200, extraHeaders = {}) {
   return new Response(JSON.stringify(data), {
@@ -44,7 +44,7 @@ function redirectResponse(targetUrl, cookies = []) {
 }
 
 export async function handleGoogleLogin(request, env, url) {
-  const returnTo = url.searchParams.get("return_to") || "/";
+  const returnTo = sanitizeReturnTo(url.searchParams.get("return_to"));
   const statePayload = JSON.stringify({
     rnd: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2),
     ret: returnTo,
@@ -65,7 +65,7 @@ export async function handleGoogleLogin(request, env, url) {
 }
 
 export async function handleTrialLogin(request, env, url) {
-  const returnTo = url.searchParams.get("return_to") || "/";
+  const returnTo = sanitizeReturnTo(url.searchParams.get("return_to"));
   const cookies = parseCookies(request);
 
   if (cookies["ahkam_trial_used"] === "1") {
@@ -107,9 +107,7 @@ export async function handleGoogleCallback(request, env, url) {
   try {
     if (queryState) {
       const parsed = JSON.parse(atob(queryState));
-      if (parsed.ret && typeof parsed.ret === "string" && parsed.ret.startsWith("/")) {
-        returnTo = parsed.ret;
-      }
+      returnTo = sanitizeReturnTo(parsed.ret);
     }
   } catch {}
 

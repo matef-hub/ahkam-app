@@ -1,11 +1,13 @@
 import { escapeHtml } from "../lib/arabic.js";
+import { sanitizeReturnTo } from "../lib/security.js";
 import { SHARED_STYLES } from "./styles.js";
 import { renderTopDevBar, renderSiteFooter, FONT_LINKS } from "./components.js";
 
 export function renderLoginPageHtml({ returnTo = "/", error = "", isDev = false } = {}) {
-  const safeReturn = escapeHtml(returnTo || "/");
-  const loginUrl = `/auth/google/login?return_to=${encodeURIComponent(returnTo || "/")}`;
-  const trialLoginUrl = `/auth/trial/login?return_to=${encodeURIComponent(returnTo || "/")}`;
+  const safeTarget = sanitizeReturnTo(returnTo);
+  const safeReturn = escapeHtml(safeTarget);
+  const loginUrl = `/auth/google/login?return_to=${encodeURIComponent(safeTarget)}`;
+  const trialLoginUrl = `/auth/trial/login?return_to=${encodeURIComponent(safeTarget)}`;
 
   return `<!DOCTYPE html>
 <html lang="ar" dir="rtl">

@@ -15,6 +15,7 @@ import {
   removeUserSavedJudgment,
   batchSyncSavedJudgments,
 } from "../src/lib/user-saved.js";
+import { sanitizeReturnTo } from "../src/lib/security.js";
 import worker from "../src/index.js";
 
 const db = initDatabase();
@@ -258,4 +259,111 @@ test("Trial session: Refreshing / after 1 search redirects to /login and /login 
   assert.equal(refreshRes.status, 302, "Must redirect to /login after 1 trial search");
   assert.ok(refreshRes.headers.get("Location").includes("/login"), "Redirect Location must point to /login");
 });
+
+test("OAuth security: sanitizeReturnTo correctly accepts internal paths and rejects dangerous targets", () => {
+  // Required valid internal paths
+  assert.equal(sanitizeReturnTo("/"), "/");
+  assert.equal(sanitizeReturnTo("/?q=شيك"), "/?q=شيك");
+  assert.equal(sanitizeReturnTo("/judgment/123"), "/judgment/123");
+  assert.equal(sanitizeReturnTo("/login?return_to=/judgment/123"), "/login?return_to=/judgment/123");
+  assert.equal(sanitizeReturnTo("/judgment/123#section"), "/judgment/123#section");
+  assert.equal(sanitizeReturnTo("/api/search?q=عقد&page=2"), "/api/search?q=عقد&page=2");
+
+  // Protocol-relative attacks
+  assert.equal(sanitizeReturnTo("//evil.example"), "/", "Must reject //evil.example");
+  assert.equal(sanitizeReturnTo("///evil.example"), "/", "Must reject ///evil.example");
+  assert.equal(sanitizeReturnTo("////evil.example"), "/", "Must reject ////evil.example");
+  assert.equal(sanitizeReturnTo("/\\evil.example"), "/", "Must reject /\\evil.example");
+  assert.equal(sanitizeReturnTo("  //evil.example  "), "/", "Must reject trimmed //evil.example");
+
+  // Absolute external URLs
+  assert.equal(sanitizeReturnTo("https://evil.example"), "/", "Must reject https://evil.example");
+  assert.equal(sanitizeReturnTo("http://evil.example"), "/", "Must reject http://evil.example");
+  assert.equal(sanitizeReturnTo("ftp://evil.example"), "/", "Must reject ftp://evil.example");
+  assert.equal(sanitizeReturnTo("https:evil.example"), "/", "Must reject https:evil.example");
+
+  // Dangerous URI schemes
+  assert.equal(sanitizeReturnTo("javascript:alert(1)"), "/", "Must reject javascript:alert(1)");
+  assert.equal(sanitizeReturnTo("data:text/html,..."), "/", "Must reject data:text/html");
+  assert.equal(sanitizeReturnTo("vbscript:alert(1)"), "/", "Must reject vbscript:alert(1)");
+  assert.equal(sanitizeReturnTo("blob:https://evil.example"), "/", "Must reject blob: schemes");
+
+  // Encoded protocol-relative attempts
+  assert.equal(sanitizeReturnTo("%2F%2Fevil.example"), "/", "Must reject %2F%2Fevil.example");
+  assert.equal(sanitizeReturnTo("/%2fevil.example"), "/", "Must reject /%2fevil.example");
+  assert.equal(sanitizeReturnTo("/%2Fevil.example"), "/", "Must reject /%2Fevil.example");
+  assert.equal(sanitizeReturnTo("/%5cevil.example"), "/", "Must reject /%5cevil.example");
+  assert.equal(sanitizeReturnTo("/%5Cevil.example"), "/", "Must reject /%5Cevil.example");
+  assert.equal(sanitizeReturnTo("/%2f%2fevil.example"), "/", "Must reject /%2f%2fevil.example");
+  assert.equal(sanitizeReturnTo("/%00evil.example"), "/", "Must reject null byte injections");
+
+  // Invalid / non-path targets
+  assert.equal(sanitizeReturnTo(""), "/");
+  assert.equal(sanitizeReturnTo("   "), "/");
+  assert.equal(sanitizeReturnTo(null), "/");
+  assert.equal(sanitizeReturnTo(undefined), "/");
+  assert.equal(sanitizeReturnTo("evil.example"), "/");
+});
+
+test("OAuth security integration: Trial login rejects protocol-relative redirect and resolves to /", async () => {
+  const evilReq = new Request("http://localhost:3000/auth/trial/login?return_to=//evil.example");
+  const evilRes = await worker.fetch(evilReq, { DB: db });
+  assert.equal(evilRes.status, 302);
+  assert.equal(evilRes.headers.get("Location"), "/", "Must redirect to / and NOT //evil.example");
+
+  const validReq = new Request("http://localhost:3000/auth/trial/login?return_to=/judgment/123");
+  const validRes = await worker.fetch(validReq, { DB: db });
+  assert.equal(validRes.status, 302);
+  assert.equal(validRes.headers.get("Location"), "/judgment/123", "Must redirect to valid internal /judgment/123");
+});
+
+test("OAuth security integration: Google login state embeds sanitized return_to", async () => {
+  // Test with protocol-relative URL
+  const evilLoginReq = new Request("http://localhost:3000/auth/google/login?return_to=//evil.example");
+  const fakeEnv = {
+    DB: db,
+    GOOGLE_CLIENT_ID: "fake-client-id",
+    GOOGLE_CLIENT_SECRET: "fake-client-secret",
+  };
+  const evilLoginRes = await worker.fetch(evilLoginReq, fakeEnv);
+  assert.equal(evilLoginRes.status, 302);
+  const locationUrl = new URL(evilLoginRes.headers.get("Location"));
+  const stateParam = locationUrl.searchParams.get("state");
+  assert.ok(stateParam, "State param exists");
+  const statePayload = JSON.parse(atob(stateParam));
+  assert.equal(statePayload.ret, "/", "State ret payload must be sanitized to /");
+
+  // Test with valid internal path
+  const validLoginReq = new Request("http://localhost:3000/auth/google/login?return_to=/judgment/123");
+  const validLoginRes = await worker.fetch(validLoginReq, fakeEnv);
+  assert.equal(validLoginRes.status, 302);
+  const validLocationUrl = new URL(validLoginRes.headers.get("Location"));
+  const validStateParam = validLocationUrl.searchParams.get("state");
+  const validStatePayload = JSON.parse(atob(validStateParam));
+  assert.equal(validStatePayload.ret, "/judgment/123", "State ret payload must preserve /judgment/123");
+});
+
+test("OAuth security integration: Authenticated user visiting /login with evil return_to is redirected to /", async () => {
+  const normalUser = await upsertGoogleUser(db, {
+    googleId: "auth-redirect-test-" + Date.now(),
+    email: "auth-redirect-" + Date.now() + "@example.com",
+    name: "مستخدم مؤكد",
+  });
+  const session = await createSession(db, normalUser.id, new Request("http://localhost:3000/"));
+
+  const evilReq = new Request("http://localhost:3000/login?return_to=//evil.example", {
+    headers: { Cookie: `${SESSION_COOKIE_NAME}=${session.token}` },
+  });
+  const evilRes = await worker.fetch(evilReq, { DB: db });
+  assert.equal(evilRes.status, 302);
+  assert.equal(evilRes.headers.get("Location"), "http://localhost:3000/");
+
+  const validReq = new Request("http://localhost:3000/login?return_to=/judgment/123", {
+    headers: { Cookie: `${SESSION_COOKIE_NAME}=${session.token}` },
+  });
+  const validRes = await worker.fetch(validReq, { DB: db });
+  assert.equal(validRes.status, 302);
+  assert.equal(validRes.headers.get("Location"), "http://localhost:3000/judgment/123");
+});
+
 

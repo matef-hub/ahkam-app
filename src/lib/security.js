@@ -157,3 +157,64 @@ export function validateIdParam(url) {
   const parsed = parseOptionalPositiveInteger(readParam(url, "id"), 2147483647);
   return parsed.ok && parsed.value ? { valid: true, id: parsed.value } : { valid: false, error: "معرف الحكم غير صالح" };
 }
+
+/**
+ * Validates and sanitizes internal redirection targets (return_to).
+ * - Accepts relative internal paths (preserving path + query + fragment).
+ * - Rejects protocol-relative URLs (e.g. //evil.example, /\evil.example).
+ * - Rejects absolute external URLs (e.g. https://evil.example).
+ * - Rejects schemes such as javascript:, data:, vbscript:, etc.
+ * - Rejects encoded and obfuscated protocol-relative attempts.
+ * - Falls back to "/" safely.
+ */
+export function sanitizeReturnTo(raw) {
+  if (typeof raw !== "string") return "/";
+  const target = raw.trim();
+  if (!target) return "/";
+
+  // Prevent control characters, newlines, tabs, and null bytes (CRLF / header injection)
+  if (/[\x00-\x1F\x7F]/.test(target)) return "/";
+
+  // Must begin with a single forward slash
+  if (!target.startsWith("/")) return "/";
+
+  // Reject protocol-relative slashes or backslashes immediately
+  if (target.startsWith("//") || target.startsWith("/\\") || target.includes("\\")) return "/";
+
+  // Reject scheme patterns like javascript:, data:, https:, http:, etc.
+  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(target)) return "/";
+
+  // Reject encoded slashes or backslashes at start
+  if (/^\/(?:%2f|%5c|\/|\\)/i.test(target)) return "/";
+
+  // Test decoding for nested protocol-relative or scheme attempts
+  try {
+    const decoded = decodeURIComponent(target);
+    if (decoded.startsWith("//") || decoded.startsWith("/\\") || decoded.includes("\\")) {
+      return "/";
+    }
+    if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(decoded.trim())) {
+      return "/";
+    }
+    if (/[\x00-\x1F\x7F]/.test(decoded)) {
+      return "/";
+    }
+  } catch {
+    return "/";
+  }
+
+  // Parse using URL with fixed dummy origin to ensure it stays strictly internal
+  try {
+    const dummyOrigin = "https://internal.local";
+    const parsed = new URL(target, dummyOrigin);
+    if (parsed.origin !== dummyOrigin) return "/";
+    if (!parsed.pathname.startsWith("/") || parsed.pathname.startsWith("//")) {
+      return "/";
+    }
+  } catch {
+    return "/";
+  }
+
+  return target;
+}
+
