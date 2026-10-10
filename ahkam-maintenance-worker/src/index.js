@@ -99,6 +99,46 @@ const MAINTENANCE_HTML = `<!DOCTYPE html>
       -webkit-font-smoothing: antialiased;
     }
 
+    /* خلفيات متحركة دقيقة وناعمة Ambient Floating Orbs */
+    .ambient-glow {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(65px);
+      pointer-events: none;
+      z-index: 0;
+      opacity: 0.65;
+    }
+
+    .ambient-gold {
+      width: 320px;
+      height: 320px;
+      background: radial-gradient(circle, rgba(197, 155, 39, 0.22) 0%, rgba(197, 155, 39, 0.02) 70%);
+      top: -60px;
+      right: -60px;
+      animation: floatSlow 12s ease-in-out infinite alternate;
+    }
+
+    .ambient-navy {
+      width: 380px;
+      height: 380px;
+      background: radial-gradient(circle, rgba(10, 25, 47, 0.14) 0%, rgba(10, 25, 47, 0.01) 70%);
+      bottom: -80px;
+      left: -80px;
+      animation: floatSlowReverse 14s ease-in-out infinite alternate;
+    }
+
+    @keyframes floatSlow {
+      0% { transform: translate(0, 0) scale(1); }
+      50% { transform: translate(-30px, 40px) scale(1.08); }
+      100% { transform: translate(20px, 60px) scale(0.95); }
+    }
+
+    @keyframes floatSlowReverse {
+      0% { transform: translate(0, 0) scale(1); }
+      50% { transform: translate(35px, -35px) scale(1.1); }
+      100% { transform: translate(-20px, -50px) scale(0.92); }
+    }
+
     .maintenance-wrapper {
       height: 100vh;
       max-height: 100vh;
@@ -109,19 +149,33 @@ const MAINTENANCE_HTML = `<!DOCTYPE html>
       padding: 16px;
       box-sizing: border-box;
       overflow: hidden;
+      position: relative;
+      z-index: 1;
     }
 
     .maintenance-card {
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: var(--radius-lg);
-      box-shadow: var(--shadow-lg);
+      box-shadow: 0 20px 45px -10px rgba(10, 25, 47, 0.12), 0 0 0 1px rgba(179, 135, 40, 0.16);
       max-width: 540px;
       width: 100%;
       padding: 24px 28px 20px;
       text-align: center;
       position: relative;
       box-sizing: border-box;
+      animation: cardEntrance 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
+    }
+
+    @keyframes cardEntrance {
+      0% {
+        opacity: 0;
+        transform: translateY(22px) scale(0.97);
+      }
+      100% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
     }
 
     .maintenance-card::before {
@@ -131,7 +185,14 @@ const MAINTENANCE_HTML = `<!DOCTYPE html>
       left: 0;
       right: 0;
       height: 5px;
-      background: linear-gradient(90deg, var(--gold), var(--primary), var(--gold));
+      background: linear-gradient(90deg, var(--gold), var(--primary), var(--gold), var(--primary));
+      background-size: 300% 100%;
+      animation: shimmerBar 4s linear infinite;
+    }
+
+    @keyframes shimmerBar {
+      0% { background-position: 0% 50%; }
+      100% { background-position: 100% 50%; }
     }
 
     .brand-emblem {
@@ -144,21 +205,37 @@ const MAINTENANCE_HTML = `<!DOCTYPE html>
       background: var(--surface-muted);
       border: 1px solid var(--border);
       border-radius: 50%;
-      box-shadow: var(--shadow-sm);
+      box-shadow: 0 4px 14px rgba(10, 25, 47, 0.08);
+      position: relative;
+      animation: emblemFloat 4s ease-in-out infinite;
+    }
+
+    @keyframes emblemFloat {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-4px); }
+    }
+
+    .brand-emblem img {
+      transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .brand-emblem:hover img {
+      transform: scale(1.1) rotate(5deg);
     }
 
     .maintenance-status-badge {
       display: inline-flex;
       align-items: center;
-      gap: 6px;
+      gap: 7px;
       background: rgba(179, 135, 40, 0.12);
       color: var(--gold-dark);
       border: 1px solid var(--gold-border);
-      padding: 4px 12px;
+      padding: 4px 14px;
       border-radius: 9999px;
       font-size: 0.8rem;
       font-weight: 700;
       margin-bottom: 12px;
+      box-shadow: 0 2px 8px rgba(179, 135, 40, 0.12);
     }
 
     .pulsing-dot {
@@ -166,13 +243,25 @@ const MAINTENANCE_HTML = `<!DOCTYPE html>
       height: 7px;
       background-color: var(--gold);
       border-radius: 50%;
-      animation: pulse 1.8s infinite;
+      position: relative;
     }
 
-    @keyframes pulse {
-      0% { transform: scale(0.9); opacity: 0.8; }
-      50% { transform: scale(1.4); opacity: 1; }
-      100% { transform: scale(0.9); opacity: 0.8; }
+    .pulsing-dot::after {
+      content: "";
+      position: absolute;
+      top: -3px;
+      left: -3px;
+      right: -3px;
+      bottom: -3px;
+      border-radius: 50%;
+      background: var(--gold);
+      opacity: 0.6;
+      animation: ripple 1.8s ease-out infinite;
+    }
+
+    @keyframes ripple {
+      0% { transform: scale(0.8); opacity: 0.8; }
+      100% { transform: scale(2.2); opacity: 0; }
     }
 
     .maintenance-title {
@@ -197,6 +286,7 @@ const MAINTENANCE_HTML = `<!DOCTYPE html>
       padding: 12px 16px;
       text-align: right;
       margin-bottom: 16px;
+      box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.02);
     }
 
     .detail-item {
@@ -207,6 +297,12 @@ const MAINTENANCE_HTML = `<!DOCTYPE html>
       font-size: 0.84rem;
       color: var(--text-muted);
       line-height: 1.4;
+      transition: transform 0.2s ease, color 0.2s ease;
+    }
+
+    .detail-item:hover {
+      transform: translateX(-3px);
+      color: var(--text-main);
     }
 
     .detail-item:last-child {
@@ -216,6 +312,12 @@ const MAINTENANCE_HTML = `<!DOCTYPE html>
     .detail-icon {
       font-size: 1rem;
       flex-shrink: 0;
+      display: inline-block;
+      transition: transform 0.3s ease;
+    }
+
+    .detail-item:hover .detail-icon {
+      transform: scale(1.2);
     }
 
     .maintenance-footer {
@@ -234,17 +336,19 @@ const MAINTENANCE_HTML = `<!DOCTYPE html>
       color: var(--primary);
       text-decoration: none;
       font-weight: 700;
+      transition: color 0.2s;
     }
 
     .contact-link:hover {
+      color: var(--gold-dark);
       text-decoration: underline;
     }
 
     .retry-btn {
-      background: var(--primary);
+      background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
       color: #ffffff;
-      border: none;
-      padding: 8px 20px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      padding: 8px 22px;
       border-radius: var(--radius-sm);
       font-family: var(--font-sans);
       font-weight: 700;
@@ -252,16 +356,36 @@ const MAINTENANCE_HTML = `<!DOCTYPE html>
       cursor: pointer;
       display: inline-flex;
       align-items: center;
-      gap: 6px;
-      transition: background-color 0.2s;
+      gap: 7px;
+      box-shadow: 0 4px 12px rgba(10, 25, 47, 0.18);
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
     }
 
     .retry-btn:hover {
-      background: var(--primary-light);
+      transform: translateY(-2px);
+      box-shadow: 0 6px 16px rgba(10, 25, 47, 0.26);
+      background: linear-gradient(135deg, var(--primary-light) 0%, var(--primary) 100%);
+    }
+
+    .retry-btn:active {
+      transform: translateY(0);
+      box-shadow: 0 2px 6px rgba(10, 25, 47, 0.18);
+    }
+
+    .retry-icon {
+      display: inline-block;
+      transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .retry-btn:hover .retry-icon {
+      transform: rotate(180deg);
     }
   </style>
 </head>
 <body>
+  <div class="ambient-glow ambient-gold"></div>
+  <div class="ambient-glow ambient-navy"></div>
+
   <div class="maintenance-wrapper">
     <div class="maintenance-card">
       <div class="brand-emblem">
@@ -282,7 +406,7 @@ const MAINTENANCE_HTML = `<!DOCTYPE html>
       <div class="maintenance-details-box">
         <div class="detail-item">
           <span class="detail-icon">🛡️</span>
-          <span><strong>حماية البيانات:</strong> قواعد البيانات مفصولة ومؤمنة بالكامل أثناء أعمال الترقية.</span>
+          <span><strong>حماية البيانات:</strong> تم فصل واستقرار قواعد البيانات بأمان كامل أثناء أعمال الترقية.</span>
         </div>
         <div class="detail-item">
           <span class="detail-icon">⚡</span>
@@ -296,7 +420,8 @@ const MAINTENANCE_HTML = `<!DOCTYPE html>
 
       <div style="margin-bottom: 14px;">
         <button type="button" class="retry-btn" onclick="window.location.reload()">
-          <span>🔄 إعادة المحاولة</span>
+          <span class="retry-icon">🔄</span>
+          <span>إعادة المحاولة</span>
         </button>
       </div>
 
