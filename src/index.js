@@ -21,6 +21,7 @@ import {
   renderJudgmentPageHtml,
   renderCourtLandingPageHtml,
   renderLoginPageHtml,
+  renderMaintenancePageHtml,
 } from "./ui/templates.js";
 import { getHomeStats, getJudgmentById, getCourtLandingData } from "./lib/db.js";
 
@@ -155,6 +156,47 @@ export default {
     if (url.pathname === "/robots.txt") return finish(handleRobotsTxt());
     if (/^\/sitemap(?:-\d+)?\.xml$/.test(url.pathname)) {
       return finish(await handleSitemap(request, env, url, ctx));
+    }
+
+    // Maintenance Mode Switch:
+    // When MAINTENANCE_MODE is active (or enabled via env/global), immediately serve the
+    // maintenance page with HTTP 503 and Retry-After header.
+    // Crucially: NO DATABASE QUERIES OR SESSIONS ARE TOUCHED!
+    const isMaintenanceMode = Boolean(
+      env?.MAINTENANCE_MODE === "true" ||
+      env?.MAINTENANCE_MODE === "1" ||
+      env?.MAINTENANCE_MODE === true ||
+      globalThis.MAINTENANCE_MODE === true ||
+      globalThis.MAINTENANCE_MODE === "true" ||
+      globalThis.MAINTENANCE_MODE === "1"
+    );
+
+    if (isMaintenanceMode) {
+      if (url.pathname.startsWith("/api/")) {
+        return finish(new Response(JSON.stringify({
+          error: "service_unavailable",
+          message: "النظام في وضع الصيانة والتحديث المجدول حالياً. يرجى المحاولة لاحقاً.",
+        }), {
+          status: 503,
+          headers: {
+            ...SECURITY_HEADERS,
+            "Content-Type": "application/json; charset=utf-8",
+            "Cache-Control": "no-store, no-cache, must-revalidate",
+            "Retry-After": "3600",
+          },
+        }));
+      }
+
+      const html = renderMaintenancePageHtml();
+      return finish(new Response(html, {
+        status: 200,
+        headers: {
+          ...SECURITY_HEADERS,
+          "Content-Type": "text/html; charset=utf-8",
+          "Cache-Control": "no-store, no-cache, must-revalidate",
+          "Retry-After": "3600",
+        },
+      }));
     }
 
     // Authentication Routes

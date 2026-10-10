@@ -225,3 +225,50 @@ export function getClientIp(request) {
          "127.0.0.1";
 }
 
+const scrapingTracker = new Map();
+const SCRAPING_WINDOW_MS = 60000;
+
+/**
+ * Lightweight in-memory anti-scraping and sequential ID access detection (P0-5, P0-6).
+ * Detects clients issuing rapid sequential judgment IDs or unusually high rates.
+ */
+export function isScrapingAbuse(clientKey, id) {
+  if (!clientKey) return false;
+  const now = Date.now();
+  let record = scrapingTracker.get(clientKey);
+
+  if (!record || now - record.resetTime > SCRAPING_WINDOW_MS) {
+    scrapingTracker.set(clientKey, {
+      count: 1,
+      lastId: typeof id === "number" ? id : null,
+      sequentialHits: 0,
+      resetTime: now,
+    });
+    if (scrapingTracker.size > 2000) {
+      for (const [k, v] of scrapingTracker.entries()) {
+        if (now - v.resetTime > SCRAPING_WINDOW_MS) scrapingTracker.delete(k);
+      }
+    }
+    return false;
+  }
+
+  record.count++;
+  if (typeof id === "number" && record.lastId !== null) {
+    // Detect sequential enumeration e.g. /judgment/100, /judgment/101, /judgment/102...
+    if (Math.abs(id - record.lastId) === 1) {
+      record.sequentialHits++;
+    }
+  }
+  if (typeof id === "number") {
+    record.lastId = id;
+  }
+
+  // If client touches more than 15 sequential judgment IDs in 1 minute or >60 judgment requests
+  if (record.sequentialHits > 15 || record.count > 60) {
+    return true;
+  }
+
+  return false;
+}
+
+

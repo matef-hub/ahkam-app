@@ -650,6 +650,30 @@ test("Phase 6: Saved Judgment API hardening, non-existent rejection, payload lim
   assert.ok(listDataA.saved.some(s => s.masterId === 2), "User A's saved judgment must remain untouched by User B");
 });
 
+test("Maintenance Mode: Serves 200 maintenance page (healthy for proxy) and completely bypasses DB access", async () => {
+  // Pass a dummy DB object that throws if ANY query is executed
+  const throwingDb = {
+    prepare() { throw new Error("DB TOUCHED DURING MAINTENANCE MODE!"); },
+    batch() { throw new Error("DB TOUCHED DURING MAINTENANCE MODE!"); },
+  };
+
+  const reqHome = new Request("http://localhost:3000/");
+  const resHome = await worker.fetch(reqHome, { DB: throwingDb, MAINTENANCE_MODE: "true" });
+  assert.equal(resHome.status, 200, "Must return HTTP 200 for health checks while showing maintenance page");
+  assert.equal(resHome.headers.get("Retry-After"), "3600", "Must provide Retry-After header");
+  const html = await resHome.text();
+  assert.ok(html.includes("صيانة وتحديث مجدول للنظام"), "Must render maintenance message");
+  assert.ok(html.includes("تم فصل واستقرار قواعد البيانات بأمان كامل"), "Must show DB safely offline note");
+
+  // Verify API returns 503 JSON without touching DB
+  const reqApi = new Request("http://localhost:3000/api/search?q=شيك");
+  const resApi = await worker.fetch(reqApi, { DB: throwingDb, MAINTENANCE_MODE: "true" });
+  assert.equal(resApi.status, 503, "API must return HTTP 503");
+  const apiData = await resApi.json();
+  assert.equal(apiData.error, "service_unavailable");
+});
+
+
 
 
 

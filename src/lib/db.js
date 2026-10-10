@@ -216,14 +216,18 @@ export async function searchJudgments(db, options) {
   };
 }
 
-export async function getJudgmentById(db, masterId) {
+export async function getJudgmentById(db, masterId, { isPreview = false } = {}) {
   const masterStmt = db.prepare(`SELECT m.Master_ID, m.Court_ID, m.Case_No, m.Case_Year, m.Office_Year, m.Case_Date, m.Master_Text, c.Court_Name
     FROM Judgments_Master AS m LEFT JOIN Courts AS c ON c.Court_ID = m.Court_ID WHERE m.Master_ID = ? LIMIT 1`).bind(masterId);
-  const textsStmt = db.prepare(`SELECT Fakra_ID, Fakra_No, Fakra_Text FROM Judgments_Text WHERE Master_ID = ?
-    ORDER BY CASE WHEN Fakra_No = 0 THEN 1 WHEN Fakra_No = -2 THEN 2 WHEN Fakra_No = -50 THEN 3 WHEN Fakra_No > 0 THEN 4 ELSE 5 END, Fakra_No ASC, Fakra_ID ASC`).bind(masterId);
+  // In preview mode, do not load protected full text paragraphs (Judgments_Text) from database
+  const textsStmt = isPreview
+    ? null
+    : db.prepare(`SELECT Fakra_ID, Fakra_No, Fakra_Text FROM Judgments_Text WHERE Master_ID = ?
+        ORDER BY CASE WHEN Fakra_No = 0 THEN 1 WHEN Fakra_No = -2 THEN 2 WHEN Fakra_No = -50 THEN 3 WHEN Fakra_No > 0 THEN 4 ELSE 5 END, Fakra_No ASC, Fakra_ID ASC`).bind(masterId);
+  // In preview mode, limit principles to at most 1 preview principle
   const principlesStmt = db.prepare(`SELECT DISTINCT p.Mogz_ID, p.Mogz_Text FROM Judgments_Principles AS p
     JOIN Judgments_Principles_Links AS l ON l.Mogz_ID = p.Mogz_ID JOIN Judgments_Text AS t ON t.Fakra_ID = l.Fakra_ID
-    WHERE t.Master_ID = ? ORDER BY p.Mogz_ID ASC`).bind(masterId);
+    WHERE t.Master_ID = ? ORDER BY p.Mogz_ID ASC ${isPreview ? "LIMIT 1" : ""}`).bind(masterId);
   // Option A: Check verified explicit relations first
   const explicitRelationsStmt = db.prepare(`SELECT peer.Master_ID, peer.Case_No, peer.Case_Year, peer.Case_Date, c.Court_Name,
     rel.Relation_Type, rel.Relation_Source, rel.Weight
@@ -238,19 +242,44 @@ export async function getJudgmentById(db, masterId) {
     LEFT JOIN Courts AS c ON c.Court_ID = peer.Court_ID WHERE current.Master_ID = ?
     ORDER BY ${dateSortExpression("peer")} DESC, peer.Master_ID DESC LIMIT 5`).bind(masterId);
 
-  const batch = await db.batch([masterStmt, textsStmt, principlesStmt, explicitRelationsStmt, peerCourtStmt]);
+  const statements = [masterStmt];
+  if (textsStmt) statements.push(textsStmt);
+  statements.push(principlesStmt, explicitRelationsStmt, peerCourtStmt);
+
+  const batch = await db.batch(statements);
   const master = batch[0]?.results?.[0] || null;
   if (!master) return { found: false };
 
-  const explicitRelations = batch[3]?.results || [];
-  const peerJudgments = batch[4]?.results || [];
+  let texts = [];
+  let principles = [];
+  let explicitRelations = [];
+  let peerJudgments = [];
+
+  if (isPreview) {
+    principles = batch[1]?.results || [];
+    explicitRelations = batch[2]?.results || [];
+    peerJudgments = batch[3]?.results || [];
+
+    // Redact Master_Text to a short controlled preview snippet (at most 200 chars)
+    if (master.Master_Text) {
+      const full = master.Master_Text.trim();
+      master.Master_Text = full.slice(0, 200) + (full.length > 200 ? "..." : "");
+    }
+  } else {
+    texts = batch[1]?.results || [];
+    principles = batch[2]?.results || [];
+    explicitRelations = batch[3]?.results || [];
+    peerJudgments = batch[4]?.results || [];
+  }
+
   const hasExplicit = explicitRelations.length > 0;
 
   return {
     found: true,
+    is_preview: Boolean(isPreview),
     master,
-    texts: batch[1]?.results || [],
-    principles: batch[2]?.results || [],
+    texts,
+    principles,
     related: hasExplicit ? explicitRelations : peerJudgments,
     relation_mode: hasExplicit ? "verified_relation" : "court_peer_latest",
   };
@@ -357,7 +386,7 @@ export async function getJudgmentsByCourt(db, { courtIds = [], page = 1, pageSiz
     Case_Date: r.Case_Date,
     Court_ID: r.Court_ID,
     Court_Name: r.Court_Name,
-    matches: r.Master_Text ? [{ fakraLabel: "ملخص / وقائع الدعوى", snippet: r.Master_Text.slice(0, 300) + (r.Master_Text.length > 300 ? "..." : "") }] : []
+    matches: r.Master_Text ? [{ fakraLabel: "موجز دعوى", snippet: r.Master_Text.trim().slice(0, 140) + (r.Master_Text.trim().length > 140 ? "..." : "") }] : []
   }));
 
   return {
@@ -438,11 +467,20 @@ export async function getCourtLandingData(db, slug) {
     db.prepare(`SELECT Mogz_ID, Mogz_Text FROM Judgments_Principles WHERE Court_ID IN (${placeholders}) ORDER BY Mogz_ID ASC LIMIT 6`).bind(...courtInfo.courtIds).all(),
   ]);
 
+  const rawJudgments = judgmentsRes?.results || [];
+  const judgments = rawJudgments.map((j) => {
+    const text = j.Master_Text ? j.Master_Text.trim() : "";
+    return {
+      ...j,
+      Master_Text: text ? text.slice(0, 140) + (text.length > 140 ? "..." : "") : null,
+    };
+  });
+
   return {
     ...courtInfo,
     totalJudgments: Number(countMaster?.total || 0),
     totalPrinciples: Number(countPrinciples?.total || 0),
-    judgments: judgmentsRes?.results || [],
+    judgments,
     principles: principlesRes?.results || [],
     allCourts: Object.values(COURT_SLUGS),
   };

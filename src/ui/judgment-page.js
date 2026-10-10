@@ -98,6 +98,28 @@ ${renderTopDevBar()}
       </div>
       ` : ""}
 
+      ${data.is_preview ? `
+      <section class="preview-cta-card" style="background: linear-gradient(135deg, rgba(15,23,42,0.03), rgba(180,83,9,0.06)); border: 1.5px dashed var(--gold); border-radius: 12px; padding: 28px 24px; text-align: center; margin: 32px 0;">
+        <div style="font-size: 2.2rem; margin-bottom: 8px;">🔒</div>
+        <h3 style="color: var(--primary); font-size: 1.25rem; font-weight: 800; margin-bottom: 8px;">
+          محتوى محمي — النص الكامل وأسباب ومنطوق الحكم
+        </h3>
+        <p style="color: var(--text-muted); font-size: 0.95rem; max-width: 580px; margin: 0 auto 20px; line-height: 1.7;">
+          أنت تشاهد المعاينة العامة المعتمدة للأرشفة القانونية. لعرض منطوق الحكم الكامل وحيثياته التفصيلية ومبادئه المستخلصة بالكامل، تفضل بالانضمام أو ترقية حسابك.
+        </p>
+        <div style="display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;">
+          ${user ? `
+            <a href="/?upgrade=1" class="search-btn" style="text-decoration: none; padding: 10px 24px; font-weight: 700; border-radius: 8px; display: inline-flex; align-items: center; gap: 6px;">
+              <span>⭐ ترقية الحساب لعرض الحكم كاملاً</span>
+            </a>
+          ` : `
+            <a href="/login?return_to=${encodeURIComponent("/judgment/" + master.Master_ID)}" class="search-btn" style="text-decoration: none; padding: 10px 24px; font-weight: 700; border-radius: 8px; display: inline-flex; align-items: center; gap: 6px;">
+              <span>🔑 سجل الدخول لعرض الحكم كاملاً</span>
+            </a>
+          `}
+        </div>
+      </section>
+      ` : `
       ${data.principles && data.principles.length ? `
       <h2 style="color:var(--primary); font-size:1.25rem; margin: 24px 0 10px;">المبادئ القانونية المستخلصة</h2>
       <div class="principles-wrapper">
@@ -132,6 +154,7 @@ ${renderTopDevBar()}
           <div style="line-height:2.1; margin-top:8px; text-align: justify;">${escapeHtml(t.Fakra_Text)}</div>
         </section>`;
       }).join("")}
+      `}
 
       ${data.related && data.related.length ? (() => {
         const isVerified = data.relation_mode === "verified_relation" || data.related.some(r => Boolean(r.Relation_Type));

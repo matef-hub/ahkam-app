@@ -67,12 +67,26 @@ const searchLimiter = {
   },
 };
 
-// Initialize database
-const db = initDatabase();
+// Maintenance mode active: defaults to true when requested by user,
+// or controllable via MAINTENANCE_MODE environment variable.
+const isMaintenanceMode = process.env.MAINTENANCE_MODE !== "false" && process.env.MAINTENANCE_MODE !== "0";
+
+// If maintenance mode is active, do NOT connect to or touch the database at all!
+let db = null;
+if (!isMaintenanceMode) {
+  try {
+    db = initDatabase();
+  } catch (err) {
+    console.warn("Database initialization skipped or failed:", err.message);
+  }
+} else {
+  console.log("🔒 Server started in MAINTENANCE MODE: Database connection completely offline and untouched.");
+}
 
 const env = {
   DB: db,
   SEARCH_LIMITER: searchLimiter,
+  MAINTENANCE_MODE: isMaintenanceMode ? "true" : "false",
 };
 
 const server = http.createServer(async (req, res) => {

@@ -13,6 +13,7 @@ export { renderHomePageHtml } from "./home-page.js";
 export { renderJudgmentPageHtml } from "./judgment-page.js";
 export { renderCourtLandingPageHtml } from "./court-page.js";
 export { renderLoginPageHtml } from "./login-page.js";
+export { renderMaintenancePageHtml } from "./maintenance-page.js";
 export {
   renderTopDevBar,
   renderHeader,
