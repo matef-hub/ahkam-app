@@ -1,0 +1,8 @@
+name = "ahkam-maintenance"
+main = "src/index.js"
+compatibility_date = "2026-09-01"
+
+# Standalone maintenance worker.
+# Completely isolated from D1 database, search engine, sessions, and judicial data.
+# Initial safe setup uses workers.dev only for verification without touching production domains.
+
