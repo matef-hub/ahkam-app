@@ -40,7 +40,13 @@ test("Standalone Maintenance Worker: Runtime Behavior Verification across routes
   
   const html = await resHome.text();
   assert.ok(html.includes("صيانة وتحديث مجدول للنظام"), "Arabic maintenance badge rendered");
-  assert.ok(html.includes("نعمل على تحسين وتطوير منصة أحكام"), "Arabic heading rendered");
+  assert.ok(html.includes("نعمل على تحسين وتطوير منصة أحكام"), "Arabic heading/description rendered");
+  assert.ok(html.includes("67,405"), "Judgments upgrade count rendered");
+  assert.ok(html.includes("164,731"), "Legislation upgrade count rendered");
+  assert.ok(html.includes("6,572"), "State Council opinions upgrade count rendered");
+  assert.ok(html.includes("ربط أنظمة القوانين الرئيسية"), "Major legal systems pillar rendered");
+  assert.ok(html.includes("التحكيم العربي والدولي"), "Arbitration pillar rendered");
+  assert.ok(html.includes("فهرس الجرائم الجنائية المتقدم"), "Crimes index pillar rendered");
   assert.ok(html.includes("https://www.linkedin.com/in/moateflawyer/"), "LinkedIn profile link included");
   assert.ok(html.includes("window.location.reload()"), "Reload button performs page refresh only");
 

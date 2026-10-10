@@ -48,7 +48,7 @@ const MAINTENANCE_HTML = `<!DOCTYPE html>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>أحكام — النظام في وضع الصيانة والتحديث المجدول</title>
+  <title>أحكام — ترقية وتطوير شامل لمنصة أحكام</title>
   <meta name="robots" content="noindex, nofollow">
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -89,14 +89,15 @@ const MAINTENANCE_HTML = `<!DOCTYPE html>
       margin: 0;
       background-color: var(--bg);
       background-image: 
-        radial-gradient(at 0% 0%, rgba(197, 155, 39, 0.05) 0px, transparent 40%),
-        radial-gradient(at 100% 100%, rgba(10, 25, 47, 0.04) 0px, transparent 50%),
+        radial-gradient(at 0% 0%, rgba(197, 155, 39, 0.08) 0px, transparent 40%),
+        radial-gradient(at 100% 100%, rgba(10, 25, 47, 0.06) 0px, transparent 50%),
         var(--bg-pattern);
       background-size: 100% 100%, 100% 100%, 28px 28px;
       color: var(--text-main);
       font-family: var(--font-sans);
-      line-height: 1.6;
+      line-height: 1.5;
       -webkit-font-smoothing: antialiased;
+      position: relative;
     }
 
     /* خلفيات متحركة دقيقة وناعمة Ambient Floating Orbs */
@@ -110,8 +111,8 @@ const MAINTENANCE_HTML = `<!DOCTYPE html>
     }
 
     .ambient-gold {
-      width: 320px;
-      height: 320px;
+      width: 340px;
+      height: 340px;
       background: radial-gradient(circle, rgba(197, 155, 39, 0.22) 0%, rgba(197, 155, 39, 0.02) 70%);
       top: -60px;
       right: -60px;
@@ -146,7 +147,7 @@ const MAINTENANCE_HTML = `<!DOCTYPE html>
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      padding: 16px;
+      padding: 12px 16px;
       box-sizing: border-box;
       overflow: hidden;
       position: relative;
@@ -158,19 +159,19 @@ const MAINTENANCE_HTML = `<!DOCTYPE html>
       border: 1px solid var(--border);
       border-radius: var(--radius-lg);
       box-shadow: 0 16px 40px -8px rgba(10, 25, 47, 0.08), 0 0 0 1px rgba(179, 135, 40, 0.18);
-      max-width: 540px;
+      max-width: 660px;
       width: 100%;
-      padding: 26px 28px 20px;
+      padding: 18px 22px 14px;
       text-align: center;
       position: relative;
       box-sizing: border-box;
-      animation: cardEntrance 0.8s cubic-bezier(0.16, 1, 0.3, 1) both;
+      animation: cardEntrance 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
     }
 
     @keyframes cardEntrance {
       0% {
         opacity: 0;
-        transform: translateY(22px) scale(0.97);
+        transform: translateY(18px) scale(0.98);
       }
       100% {
         opacity: 1;
@@ -178,24 +179,30 @@ const MAINTENANCE_HTML = `<!DOCTYPE html>
       }
     }
 
+    .brand-header-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+
     .brand-emblem {
-      width: 58px;
-      height: 58px;
-      margin: 0 auto 12px;
+      width: 42px;
+      height: 42px;
       display: flex;
       align-items: center;
       justify-content: center;
       background: var(--surface-muted);
       border: 1px solid var(--border);
       border-radius: 50%;
-      box-shadow: 0 4px 14px rgba(10, 25, 47, 0.08);
-      position: relative;
+      box-shadow: 0 2px 8px rgba(10, 25, 47, 0.06);
       animation: emblemFloat 4s ease-in-out infinite;
     }
 
     @keyframes emblemFloat {
       0%, 100% { transform: translateY(0); }
-      50% { transform: translateY(-4px); }
+      50% { transform: translateY(-3px); }
     }
 
     .brand-emblem img {
@@ -209,21 +216,19 @@ const MAINTENANCE_HTML = `<!DOCTYPE html>
     .maintenance-status-badge {
       display: inline-flex;
       align-items: center;
-      gap: 7px;
+      gap: 6px;
       background: rgba(179, 135, 40, 0.12);
       color: var(--gold-dark);
       border: 1px solid var(--gold-border);
-      padding: 4px 14px;
+      padding: 3px 12px;
       border-radius: 9999px;
-      font-size: 0.8rem;
+      font-size: 0.76rem;
       font-weight: 700;
-      margin-bottom: 12px;
-      box-shadow: 0 2px 8px rgba(179, 135, 40, 0.12);
     }
 
     .pulsing-dot {
-      width: 7px;
-      height: 7px;
+      width: 6px;
+      height: 6px;
       background-color: var(--gold);
       border-radius: 50%;
       position: relative;
@@ -249,83 +254,206 @@ const MAINTENANCE_HTML = `<!DOCTYPE html>
 
     .maintenance-title {
       color: var(--primary);
-      font-size: 1.35rem;
+      font-size: 1.25rem;
       font-weight: 900;
-      margin: 0 0 8px 0;
+      margin: 0 0 4px 0;
       line-height: 1.3;
     }
 
     .maintenance-desc {
       color: var(--text-sub);
-      font-size: 0.9rem;
-      line-height: 1.6;
-      margin-bottom: 16px;
+      font-size: 0.82rem;
+      line-height: 1.5;
+      margin-bottom: 12px;
     }
 
-    .maintenance-details-box {
-      background: var(--surface-muted);
+    /* كروت إحصائيات الترقية الكبرى */
+    .upgrade-stats-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .stat-pill-card {
+      background: linear-gradient(145deg, var(--surface) 0%, var(--surface-muted) 100%);
       border: 1px solid var(--border);
       border-radius: var(--radius-md);
-      padding: 12px 16px;
-      text-align: right;
-      margin-bottom: 16px;
-      box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.02);
+      padding: 8px 6px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      box-shadow: 0 2px 6px rgba(10, 25, 47, 0.04);
+      transition: all 0.2s ease;
     }
 
-    .detail-item {
+    .stat-pill-card:hover {
+      transform: translateY(-2px);
+      border-color: var(--gold-border);
+      box-shadow: 0 4px 12px rgba(179, 135, 40, 0.15);
+    }
+
+    .stat-icon {
+      font-size: 1.1rem;
+      line-height: 1;
+      margin-bottom: 3px;
+    }
+
+    .stat-num {
+      color: var(--gold-dark);
+      font-size: 1.05rem;
+      font-weight: 900;
+      letter-spacing: -0.3px;
+      line-height: 1.2;
+    }
+
+    .stat-label {
+      color: var(--primary);
+      font-size: 0.72rem;
+      font-weight: 700;
+      margin-top: 1px;
+    }
+
+    /* حاوية المحاور الثلاثة للترقية */
+    .upgrade-pillars-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 10px;
+      text-align: right;
+    }
+
+    .pillar-box {
+      background: var(--surface-muted);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 7px 10px;
+      box-sizing: border-box;
+      transition: border-color 0.2s ease;
+    }
+
+    .pillar-box:hover {
+      border-color: var(--gold-border);
+    }
+
+    .pillar-box-full {
+      grid-column: 1 / -1;
+    }
+
+    .pillar-header {
       display: flex;
       align-items: center;
-      gap: 8px;
-      margin-bottom: 8px;
-      font-size: 0.84rem;
+      gap: 5px;
+      color: var(--primary);
+      font-size: 0.78rem;
+      font-weight: 800;
+      margin-bottom: 3px;
+    }
+
+    .pillar-text {
       color: var(--text-muted);
-      line-height: 1.4;
-      transition: transform 0.2s ease, color 0.2s ease;
+      font-size: 0.72rem;
+      line-height: 1.45;
+      margin: 0;
     }
 
-    .detail-item:hover {
-      transform: translateX(-3px);
-      color: var(--text-main);
-    }
-
-    .detail-item:last-child {
-      margin-bottom: 0;
-    }
-
-    .detail-icon {
-      font-size: 1rem;
-      flex-shrink: 0;
+    .badge-highlight {
       display: inline-block;
-      transition: transform 0.3s ease;
+      background: #ffffff;
+      border: 1px solid var(--border);
+      color: var(--primary);
+      padding: 1px 5px;
+      border-radius: 4px;
+      font-size: 0.68rem;
+      font-weight: 700;
+      margin-left: 2px;
     }
 
-    .detail-item:hover .detail-icon {
-      transform: scale(1.2);
+    .safe-offline-note {
+      background: rgba(21, 128, 61, 0.07);
+      border: 1px solid rgba(21, 128, 61, 0.2);
+      border-radius: 6px;
+      padding: 4px 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      font-size: 0.72rem;
+      color: #14532d;
+      font-weight: 600;
+      margin-bottom: 10px;
+    }
+
+    .action-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+
+    .retry-btn {
+      background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+      color: #ffffff;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      padding: 6px 18px;
+      border-radius: var(--radius-sm);
+      font-family: var(--font-sans);
+      font-weight: 700;
+      font-size: 0.82rem;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      box-shadow: 0 3px 10px rgba(10, 25, 47, 0.15);
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .retry-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 14px rgba(10, 25, 47, 0.22);
+      background: linear-gradient(135deg, var(--primary-light) 0%, var(--primary) 100%);
+    }
+
+    .retry-btn:active {
+      transform: translateY(0);
+      box-shadow: 0 2px 6px rgba(10, 25, 47, 0.18);
+    }
+
+    .retry-icon {
+      display: inline-block;
+      transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .retry-btn:hover .retry-icon {
+      transform: rotate(180deg);
     }
 
     .maintenance-footer {
-      font-size: 0.78rem;
+      font-size: 0.73rem;
       color: var(--text-muted);
       border-top: 1px solid var(--border-subtle);
-      padding-top: 12px;
+      padding-top: 8px;
       display: flex;
       align-items: center;
       justify-content: space-between;
       flex-wrap: wrap;
-      gap: 8px;
+      gap: 6px;
     }
 
     .contact-link {
       display: inline-flex;
       align-items: center;
-      gap: 6px;
+      gap: 5px;
       color: var(--primary);
       text-decoration: none;
       font-weight: 700;
       background: var(--surface-muted);
       border: 1px solid var(--border);
-      padding: 3px 10px;
+      padding: 2px 8px;
       border-radius: 9999px;
+      font-size: 0.72rem;
       transition: all 0.2s ease;
     }
 
@@ -344,43 +472,6 @@ const MAINTENANCE_HTML = `<!DOCTYPE html>
     .contact-link:hover svg {
       transform: scale(1.1);
     }
-
-    .retry-btn {
-      background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
-      color: #ffffff;
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      padding: 8px 22px;
-      border-radius: var(--radius-sm);
-      font-family: var(--font-sans);
-      font-weight: 700;
-      font-size: 0.88rem;
-      cursor: pointer;
-      display: inline-flex;
-      align-items: center;
-      gap: 7px;
-      box-shadow: 0 4px 12px rgba(10, 25, 47, 0.18);
-      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-    }
-
-    .retry-btn:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 6px 16px rgba(10, 25, 47, 0.26);
-      background: linear-gradient(135deg, var(--primary-light) 0%, var(--primary) 100%);
-    }
-
-    .retry-btn:active {
-      transform: translateY(0);
-      box-shadow: 0 2px 6px rgba(10, 25, 47, 0.18);
-    }
-
-    .retry-icon {
-      display: inline-block;
-      transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
-    }
-
-    .retry-btn:hover .retry-icon {
-      transform: rotate(180deg);
-    }
   </style>
 </head>
 <body>
@@ -389,37 +480,80 @@ const MAINTENANCE_HTML = `<!DOCTYPE html>
 
   <div class="maintenance-wrapper">
     <div class="maintenance-card">
-      <div class="brand-emblem">
-        <img src="/logo.svg" alt="شعار أحكام" width="36" height="36">
+      <div class="brand-header-row">
+        <div class="brand-emblem">
+          <img src="/logo.svg" alt="شعار أحكام" width="28" height="28">
+        </div>
+        <div class="maintenance-status-badge">
+          <span class="pulsing-dot"></span>
+          <span>صيانة وتحديث مجدول للنظام</span>
+        </div>
       </div>
 
-      <div class="maintenance-status-badge">
-        <span class="pulsing-dot"></span>
-        <span>صيانة وتحديث مجدول للنظام</span>
-      </div>
-
-      <h1 class="maintenance-title">نعمل على تحسين وتطوير منصة أحكام</h1>
+      <h1 class="maintenance-title">ترقية وتطوير شامل لمنصة أحكام</h1>
       
       <p class="maintenance-desc">
-        تخضع منصة أحكام القضائية حالياً لصيانة دورية للبنية التحتية لضمان أعلى مستويات الأداء والأمان ومحرك البحث الفقهي.
+        نعمل على تحسين وتطوير منصة أحكام القضائية، ودمج أضخم قاعدة بيانات تشريعية وقضائية وربط النصوص بالأحكام التفسيرية الصادرة من المحاكم العليا.
       </p>
 
-      <div class="maintenance-details-box">
-        <div class="detail-item">
-          <span class="detail-icon">🛡️</span>
-          <span><strong>حماية البيانات:</strong> تم فصل واستقرار قواعد البيانات بأمان كامل أثناء أعمال الترقية.</span>
+      <!-- كروت الإحصائيات بعدد الأحكام والتشريعات والفتاوى -->
+      <div class="upgrade-stats-grid">
+        <div class="stat-pill-card">
+          <span class="stat-icon">⚖️</span>
+          <span class="stat-num">67,405</span>
+          <span class="stat-label">حكم قضائي معتمد</span>
         </div>
-        <div class="detail-item">
-          <span class="detail-icon">⚡</span>
-          <span><strong>تحسين البنية التحتية:</strong> تطوير سرعة الاستجابة وفهارس المبادئ القانونية.</span>
+        <div class="stat-pill-card">
+          <span class="stat-icon">📜</span>
+          <span class="stat-num">164,731</span>
+          <span class="stat-label">تشريع وقانون سارٍ</span>
         </div>
-        <div class="detail-item">
-          <span class="detail-icon">🕒</span>
-          <span><strong>الوقت المتوقع:</strong> سنعود للعمل بكامل طاقتنا في أقرب وقت ممكن.</span>
+        <div class="stat-pill-card">
+          <span class="stat-icon">🏛️</span>
+          <span class="stat-num">6,572</span>
+          <span class="stat-label">فتوى لمجلس الدولة</span>
         </div>
       </div>
 
-      <div style="margin-bottom: 14px;">
+      <!-- محاور الترقية الكبرى -->
+      <div class="upgrade-pillars-grid">
+        <div class="pillar-box">
+          <div class="pillar-header">
+            <span>🔗</span>
+            <span>ربط أنظمة القوانين الرئيسية</span>
+          </div>
+          <p class="pillar-text">
+            ربط قوانين <span class="badge-highlight">المرافعات</span> <span class="badge-highlight">الإثبات</span> <span class="badge-highlight">العقوبات</span> <span class="badge-highlight">الإجراءات</span> <span class="badge-highlight">المدني</span> معلقاً على كل مادة بأحكام المحاكم العليا المفسرة لها.
+          </p>
+        </div>
+
+        <div class="pillar-box">
+          <div class="pillar-header">
+            <span>🌍</span>
+            <span>التحكيم العربي والدولي</span>
+          </div>
+          <p class="pillar-text">
+            أحكام التحكيم في مجال البترول، وأحكام مركز القاهرة الإقليمي (CRCICA)، وقضاء محكمة استئناف القاهرة (الدائرة 91 تجاري).
+          </p>
+        </div>
+
+        <div class="pillar-box pillar-box-full">
+          <div class="pillar-header">
+            <span>🛡️</span>
+            <span>فهرس الجرائم الجنائية المتقدم (+3000 جريمة)</span>
+          </div>
+          <p class="pillar-text">
+            فهرسة تفصيلية تشتمل على أكثر من 3000 جريمة، مع القيود والأوصاف المستقاة من قضاء محكمة النقض، والنص التشريعي وتعديلاته وتطبيقاته القضائية.
+          </p>
+        </div>
+      </div>
+
+      <div class="safe-offline-note">
+        <span>🛡️</span>
+        <span>تم فصل واستقرار قواعد البيانات بأمان كامل أثناء أعمال الترقية.</span>
+      </div>
+
+      <div class="action-row">
         <button type="button" class="retry-btn" onclick="window.location.reload()">
           <span class="retry-icon">🔄</span>
           <span>إعادة المحاولة</span>
@@ -430,7 +564,7 @@ const MAINTENANCE_HTML = `<!DOCTYPE html>
         <span>موسوعة الأحكام القضائية المصرية © 2026</span>
         <span>للتواصل والمتابعة: 
           <a href="https://www.linkedin.com/in/moateflawyer/" target="_blank" rel="noopener noreferrer" class="contact-link" aria-label="LinkedIn Profile">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
               <path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z"/>
             </svg>
             <span>LinkedIn</span>
