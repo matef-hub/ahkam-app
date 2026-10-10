@@ -16,14 +16,21 @@ export function renderMaintenancePageHtml({ eta = "قريباً", contactEmail =
   <style>
     ${SHARED_STYLES}
     
+    html, body {
+      height: 100%;
+      overflow: hidden;
+    }
+
     .maintenance-wrapper {
-      min-height: 100vh;
+      height: 100vh;
+      max-height: 100vh;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      padding: 24px;
-      position: relative;
+      padding: 16px;
+      box-sizing: border-box;
+      overflow: hidden;
     }
 
     .maintenance-card {
@@ -31,12 +38,12 @@ export function renderMaintenancePageHtml({ eta = "قريباً", contactEmail =
       border: 1px solid var(--border);
       border-radius: var(--radius-lg);
       box-shadow: var(--shadow-lg);
-      max-width: 620px;
+      max-width: 540px;
       width: 100%;
-      padding: 48px 36px;
+      padding: 24px 28px 20px;
       text-align: center;
       position: relative;
-      overflow: hidden;
+      box-sizing: border-box;
     }
 
     .maintenance-card::before {
@@ -45,19 +52,19 @@ export function renderMaintenancePageHtml({ eta = "قريباً", contactEmail =
       top: 0;
       left: 0;
       right: 0;
-      height: 6px;
+      height: 5px;
       background: linear-gradient(90deg, var(--gold), var(--primary), var(--gold));
     }
 
     .brand-emblem {
-      width: 80px;
-      height: 80px;
-      margin: 0 auto 20px;
+      width: 58px;
+      height: 58px;
+      margin: 0 auto 12px;
       display: flex;
       align-items: center;
       justify-content: center;
       background: var(--surface-muted);
-      border: 1.5px solid var(--border);
+      border: 1px solid var(--border);
       border-radius: 50%;
       box-shadow: var(--shadow-sm);
     }
@@ -65,20 +72,20 @@ export function renderMaintenancePageHtml({ eta = "قريباً", contactEmail =
     .maintenance-status-badge {
       display: inline-flex;
       align-items: center;
-      gap: 8px;
+      gap: 6px;
       background: rgba(179, 135, 40, 0.12);
       color: var(--gold-dark);
       border: 1px solid var(--gold-border);
-      padding: 6px 16px;
+      padding: 4px 12px;
       border-radius: 9999px;
-      font-size: 0.88rem;
+      font-size: 0.8rem;
       font-weight: 700;
-      margin-bottom: 20px;
+      margin-bottom: 12px;
     }
 
     .pulsing-dot {
-      width: 8px;
-      height: 8px;
+      width: 7px;
+      height: 7px;
       background-color: var(--gold);
       border-radius: 50%;
       animation: pulse 1.8s infinite;
@@ -92,35 +99,36 @@ export function renderMaintenancePageHtml({ eta = "قريباً", contactEmail =
 
     .maintenance-title {
       color: var(--primary);
-      font-size: 1.75rem;
+      font-size: 1.35rem;
       font-weight: 900;
-      margin: 0 0 14px 0;
-      line-height: 1.35;
+      margin: 0 0 8px 0;
+      line-height: 1.3;
     }
 
     .maintenance-desc {
       color: var(--text-sub);
-      font-size: 1.02rem;
-      line-height: 1.8;
-      margin-bottom: 28px;
+      font-size: 0.9rem;
+      line-height: 1.6;
+      margin-bottom: 16px;
     }
 
     .maintenance-details-box {
       background: var(--surface-muted);
       border: 1px solid var(--border);
       border-radius: var(--radius-md);
-      padding: 20px;
+      padding: 12px 16px;
       text-align: right;
-      margin-bottom: 28px;
+      margin-bottom: 16px;
     }
 
     .detail-item {
       display: flex;
-      align-items: flex-start;
-      gap: 12px;
-      margin-bottom: 12px;
-      font-size: 0.92rem;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+      font-size: 0.84rem;
       color: var(--text-muted);
+      line-height: 1.4;
     }
 
     .detail-item:last-child {
@@ -128,20 +136,20 @@ export function renderMaintenancePageHtml({ eta = "قريباً", contactEmail =
     }
 
     .detail-icon {
-      font-size: 1.15rem;
+      font-size: 1rem;
       flex-shrink: 0;
     }
 
     .maintenance-footer {
-      font-size: 0.85rem;
+      font-size: 0.78rem;
       color: var(--text-muted);
       border-top: 1px solid var(--border-subtle);
-      padding-top: 20px;
+      padding-top: 12px;
       display: flex;
       align-items: center;
       justify-content: space-between;
       flex-wrap: wrap;
-      gap: 12px;
+      gap: 8px;
     }
 
     .contact-link {
@@ -158,15 +166,15 @@ export function renderMaintenancePageHtml({ eta = "قريباً", contactEmail =
       background: var(--primary);
       color: #ffffff;
       border: none;
-      padding: 10px 24px;
+      padding: 8px 20px;
       border-radius: var(--radius-sm);
       font-family: var(--font-sans);
       font-weight: 700;
-      font-size: 0.95rem;
+      font-size: 0.88rem;
       cursor: pointer;
       display: inline-flex;
       align-items: center;
-      gap: 8px;
+      gap: 6px;
       transition: background-color 0.2s;
     }
 
@@ -179,7 +187,7 @@ export function renderMaintenancePageHtml({ eta = "قريباً", contactEmail =
   <div class="maintenance-wrapper">
     <div class="maintenance-card">
       <div class="brand-emblem">
-        <img src="/logo.svg" alt="شعار أحكام" width="46" height="46">
+        <img src="/logo.svg" alt="شعار أحكام" width="36" height="36">
       </div>
 
       <div class="maintenance-status-badge">
@@ -190,25 +198,25 @@ export function renderMaintenancePageHtml({ eta = "قريباً", contactEmail =
       <h1 class="maintenance-title">نعمل على تحسين وتطوير منصة أحكام</h1>
       
       <p class="maintenance-desc">
-        تخضع منصة أحكام القضائية حالياً لعملية صيانة شاملة وتحديثات للبنية التحتية لضمان أعلى درجات السرعة والأمان ودقة محرك البحث الفقهي والقضائي.
+        تخضع منصة أحكام القضائية حالياً لصيانة دورية للبنية التحتية لضمان أعلى درجات السرعة والأمان ودقة محرك البحث الفقهي.
       </p>
 
       <div class="maintenance-details-box">
         <div class="detail-item">
           <span class="detail-icon">🛡️</span>
-          <span><strong>حماية البيانات:</strong> تم فصل واستقرار قواعد البيانات بأمان كامل أثناء أعمال الترقية الدورية.</span>
+          <span><strong>حماية البيانات:</strong> تم فصل واستقرار قواعد البيانات بأمان كامل أثناء أعمال الترقية.</span>
         </div>
         <div class="detail-item">
           <span class="detail-icon">⚡</span>
-          <span><strong>تطوير محرك الفهرسة:</strong> تحديث فهارس البحث المتقدمة والمبادئ القانونية المستخلصة.</span>
+          <span><strong>تطوير محرك الفهرسة:</strong> تحديث فهارس البحث المتقدمة واستخلاص المبادئ.</span>
         </div>
         <div class="detail-item">
           <span class="detail-icon">🕒</span>
-          <span><strong>الوقت المتوقع للانتهاء:</strong> سنعود للعمل بكامل طاقتنا في أقرب وقت (${escapeHtml(eta)}).</span>
+          <span><strong>الوقت المتوقع:</strong> سنعود للعمل بكامل طاقتنا في أقرب وقت (${escapeHtml(eta)}).</span>
         </div>
       </div>
 
-      <div style="margin-bottom: 24px;">
+      <div style="margin-bottom: 14px;">
         <button type="button" class="retry-btn" onclick="window.location.reload()">
           <span>🔄 إعادة المحاولة</span>
         </button>
@@ -216,7 +224,7 @@ export function renderMaintenancePageHtml({ eta = "قريباً", contactEmail =
 
       <div class="maintenance-footer">
         <span>موسوعة الأحكام القضائية المصرية © ${new Date().getFullYear()}</span>
-        <span>للاستفسارات العاجلة: <a href="mailto:${escapeHtml(contactEmail)}" class="contact-link">${escapeHtml(contactEmail)}</a></span>
+        <span>للاستفسار: <a href="mailto:${escapeHtml(contactEmail)}" class="contact-link">${escapeHtml(contactEmail)}</a></span>
       </div>
     </div>
   </div>
