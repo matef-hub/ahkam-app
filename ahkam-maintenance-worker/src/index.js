@@ -1,15 +1,3 @@
-/**
- * Standalone Maintenance Worker for Ahkam.app
- * 
- * Absolute isolation:
- * - NO D1 databases or queries.
- * - NO search indexing or FTS.
- * - NO authentication, OAuth, or sessions.
- * - Serves HTTP 503 Service Unavailable for all incoming requests.
- * - Proper caching headers (no-store) and Retry-After header.
- * - Serves embedded branding SVG icon for /favicon.ico and /logo.svg.
- */
-
 const SECURITY_HEADERS = {
   "X-Content-Type-Options": "nosniff",
   "Referrer-Policy": "strict-origin-when-cross-origin",
