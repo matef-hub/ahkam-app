@@ -41,7 +41,7 @@ test("Standalone Maintenance Worker: Runtime Behavior Verification across routes
   const html = await resHome.text();
   assert.ok(html.includes("صيانة وتحديث مجدول للنظام"), "Arabic maintenance badge rendered");
   assert.ok(html.includes("نعمل على تحسين وتطوير منصة أحكام"), "Arabic heading rendered");
-  assert.ok(html.includes("support@ahkam.app"), "Contact email included");
+  assert.ok(html.includes("https://www.linkedin.com/in/moateflawyer/"), "LinkedIn profile link included");
   assert.ok(html.includes("window.location.reload()"), "Reload button performs page refresh only");
 
   // 2. Arbitrary deep judgment route returns 503 maintenance page

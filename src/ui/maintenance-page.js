@@ -94,10 +94,10 @@ export function renderMaintenancePageHtml({ eta = "قريباً", contactEmail =
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: var(--radius-lg);
-      box-shadow: 0 20px 45px -10px rgba(10, 25, 47, 0.12), 0 0 0 1px rgba(179, 135, 40, 0.16);
+      box-shadow: 0 16px 40px -8px rgba(10, 25, 47, 0.08), 0 0 0 1px rgba(179, 135, 40, 0.18);
       max-width: 540px;
       width: 100%;
-      padding: 24px 28px 20px;
+      padding: 26px 28px 20px;
       text-align: center;
       position: relative;
       box-sizing: border-box;
@@ -113,23 +113,6 @@ export function renderMaintenancePageHtml({ eta = "قريباً", contactEmail =
         opacity: 1;
         transform: translateY(0) scale(1);
       }
-    }
-
-    .maintenance-card::before {
-      content: "";
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 5px;
-      background: linear-gradient(90deg, var(--gold), var(--primary), var(--gold), var(--primary));
-      background-size: 300% 100%;
-      animation: shimmerBar 4s linear infinite;
-    }
-
-    @keyframes shimmerBar {
-      0% { background-position: 0% 50%; }
-      100% { background-position: 100% 50%; }
     }
 
     .brand-emblem {
@@ -270,15 +253,33 @@ export function renderMaintenancePageHtml({ eta = "قريباً", contactEmail =
     }
 
     .contact-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
       color: var(--primary);
       text-decoration: none;
       font-weight: 700;
-      transition: color 0.2s;
+      background: var(--surface-muted);
+      border: 1px solid var(--border);
+      padding: 3px 10px;
+      border-radius: 9999px;
+      transition: all 0.2s ease;
     }
 
     .contact-link:hover {
-      color: var(--gold-dark);
-      text-decoration: underline;
+      color: #0a66c2;
+      border-color: #0a66c2;
+      background: rgba(10, 102, 194, 0.08);
+      transform: translateY(-1px);
+    }
+
+    .contact-link svg {
+      flex-shrink: 0;
+      transition: transform 0.2s ease;
+    }
+
+    .contact-link:hover svg {
+      transform: scale(1.1);
     }
 
     .retry-btn {
@@ -364,7 +365,14 @@ export function renderMaintenancePageHtml({ eta = "قريباً", contactEmail =
 
       <div class="maintenance-footer">
         <span>موسوعة الأحكام القضائية المصرية © ${new Date().getFullYear()}</span>
-        <span>للاستفسار: <a href="mailto:${escapeHtml(contactEmail)}" class="contact-link">${escapeHtml(contactEmail)}</a></span>
+        <span>للتواصل والمتابعة: 
+          <a href="https://www.linkedin.com/in/moateflawyer/" target="_blank" rel="noopener noreferrer" class="contact-link" aria-label="LinkedIn Profile">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M19 0h-14c-2.761 0-5 2.239-5 5v14c0 2.761 2.239 5 5 5h14c2.762 0 5-2.239 5-5v-14c0-2.761-2.238-5-5-5zm-11 19h-3v-11h3v11zm-1.5-12.268c-.966 0-1.75-.79-1.75-1.764s.784-1.764 1.75-1.764 1.75.79 1.75 1.764-.783 1.764-1.75 1.764zm13.5 12.268h-3v-5.604c0-3.368-4-3.113-4 0v5.604h-3v-11h3v1.765c1.396-2.586 7-2.777 7 2.476v6.759z"/>
+            </svg>
+            <span>LinkedIn</span>
+          </a>
+        </span>
       </div>
     </div>
   </div>
